@@ -14,7 +14,9 @@ const C = {
 const fmt = (n, cur="USD") => new Intl.NumberFormat("en-US",{style:"currency",currency:cur,maximumFractionDigits:0}).format(n||0);
 const fmtN = n => new Intl.NumberFormat("en-US").format(Math.round(n||0));
 const pct = n => `${(n||0).toFixed(1)}%`;
-const fmtM = n => n>=1e6?`$${(n/1e6).toFixed(1)}M`:n>=1e3?`$${(n/1e3).toFixed(0)}K`:`$${fmtN(n)}`;
+const genId = prefix => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2,7).toUpperCase()}`;
+const today = () => new Date().toISOString().slice(0,10);
+const isValidEmail = e => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 
 // ─── Primitives ────────────────────────────────────────────────────────────
 const Btn=({children,variant="primary",size="md",onClick,disabled,style})=>{
@@ -39,33 +41,42 @@ const Card=({children,style,onClick})=>(
   <div onClick={onClick} style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:10,padding:20,...style,cursor:onClick?"pointer":undefined}}>{children}</div>
 );
 
-const KpiCard=({label,value,sub,accent=C.primary,badge,delta})=>(
+const KpiCard=({label,value,sub,accent=C.primary,badge})=>(
   <Card style={{borderTop:`3px solid ${accent}`,flex:1,minWidth:150}}>
     <div style={{fontSize:11,color:C.textMuted,fontWeight:600,textTransform:"uppercase",letterSpacing:0.5}}>{label}</div>
     <div style={{fontSize:22,fontWeight:700,color:C.text,margin:"6px 0 4px"}}>{value}</div>
     {sub&&<div style={{fontSize:12,color:C.textSub}}>{sub}</div>}
-    {delta!==undefined&&<div style={{fontSize:12,color:delta>=0?C.success:C.danger,fontWeight:600,marginTop:4}}>{delta>=0?"▲":"▼"} {Math.abs(delta).toFixed(1)}% vs prior</div>}
     {badge&&<div style={{marginTop:6}}>{badge}</div>}
   </Card>
 );
 
-const Input=({label,value,onChange,type="text",placeholder,required,readOnly,style,hint})=>(
+const Input=({label,value,onChange,type="text",placeholder,required,readOnly,style,hint,error})=>(
   <div style={{display:"flex",flexDirection:"column",gap:4}}>
     {label&&<label style={{fontSize:12,fontWeight:600,color:C.textSub}}>{label}{required&&<span style={{color:C.danger}}> *</span>}</label>}
-    <input type={type} value={value} onChange={e=>onChange?.(e.target.value)} placeholder={placeholder} readOnly={readOnly}
-      style={{border:`1.5px solid ${C.border}`,borderRadius:6,padding:"7px 11px",fontSize:13,color:C.text,background:readOnly?C.bg:C.white,outline:"none",...style}}/>
-    {hint&&<div style={{fontSize:11,color:C.textMuted}}>{hint}</div>}
+    <input type={type} value={value||""} onChange={e=>onChange?.(e.target.value)} placeholder={placeholder} readOnly={readOnly}
+      style={{border:`1.5px solid ${error?C.danger:C.border}`,borderRadius:6,padding:"7px 11px",fontSize:13,color:C.text,background:readOnly?C.bg:C.white,outline:"none",...style}}/>
+    {error&&<div style={{fontSize:11,color:C.danger}}>{error}</div>}
+    {hint&&!error&&<div style={{fontSize:11,color:C.textMuted}}>{hint}</div>}
   </div>
 );
 
-const Select=({label,value,onChange,options,required,style,placeholder})=>(
+const Textarea=({label,value,onChange,placeholder,required,rows=3})=>(
   <div style={{display:"flex",flexDirection:"column",gap:4}}>
     {label&&<label style={{fontSize:12,fontWeight:600,color:C.textSub}}>{label}{required&&<span style={{color:C.danger}}> *</span>}</label>}
-    <select value={value} onChange={e=>onChange?.(e.target.value)}
-      style={{border:`1.5px solid ${C.border}`,borderRadius:6,padding:"7px 11px",fontSize:13,color:value?C.text:C.textMuted,background:C.white,outline:"none",...style}}>
+    <textarea value={value||""} onChange={e=>onChange?.(e.target.value)} placeholder={placeholder} rows={rows}
+      style={{border:`1.5px solid ${C.border}`,borderRadius:6,padding:"7px 11px",fontSize:13,color:C.text,background:C.white,outline:"none",resize:"vertical",fontFamily:"inherit"}}/>
+  </div>
+);
+
+const Select=({label,value,onChange,options,required,style,placeholder,error})=>(
+  <div style={{display:"flex",flexDirection:"column",gap:4}}>
+    {label&&<label style={{fontSize:12,fontWeight:600,color:C.textSub}}>{label}{required&&<span style={{color:C.danger}}> *</span>}</label>}
+    <select value={value||""} onChange={e=>onChange?.(e.target.value)}
+      style={{border:`1.5px solid ${error?C.danger:C.border}`,borderRadius:6,padding:"7px 11px",fontSize:13,color:value?C.text:C.textMuted,background:C.white,outline:"none",...style}}>
       {placeholder&&<option value="">{placeholder}</option>}
       {options.map(o=><option key={o.value??o} value={o.value??o}>{o.label??o}</option>)}
     </select>
+    {error&&<div style={{fontSize:11,color:C.danger}}>{error}</div>}
   </div>
 );
 
@@ -82,18 +93,18 @@ const Modal=({open,onClose,title,children,width=640})=>{
   </div>;
 };
 
-const Table=({cols,rows,onRow})=>(
+const Table=({cols,rows,onRow,emptyMsg="No records found"})=>(
   <div style={{overflowX:"auto"}}>
     <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
       <thead><tr>{cols.map(c=><th key={c.key} style={{padding:"9px 14px",background:C.bg,borderBottom:`1.5px solid ${C.border}`,textAlign:c.right?"right":"left",fontWeight:600,color:C.textSub,fontSize:11,textTransform:"uppercase",letterSpacing:0.4,whiteSpace:"nowrap"}}>{c.label}</th>)}</tr></thead>
       <tbody>
         {rows.map((r,i)=>(
-          <tr key={i} onClick={()=>onRow?.(r)} style={{borderBottom:`1px solid ${C.border}`,cursor:onRow?"pointer":undefined,transition:"background 0.1s"}}
+          <tr key={r.id||i} onClick={()=>onRow?.(r)} style={{borderBottom:`1px solid ${C.border}`,cursor:onRow?"pointer":undefined,transition:"background 0.1s"}}
             onMouseEnter={e=>e.currentTarget.style.background=C.primaryLight} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
             {cols.map(c=><td key={c.key} style={{padding:"10px 14px",color:C.text,textAlign:c.right?"right":"left"}}>{c.render?c.render(r,i):r[c.key]}</td>)}
           </tr>
         ))}
-        {rows.length===0&&<tr><td colSpan={cols.length} style={{padding:"32px 14px",textAlign:"center",color:C.textMuted}}>No records found</td></tr>}
+        {rows.length===0&&<tr><td colSpan={cols.length} style={{padding:"40px 14px",textAlign:"center",color:C.textMuted,fontSize:13}}>{emptyMsg}</td></tr>}
       </tbody>
     </table>
   </div>
@@ -121,219 +132,74 @@ const SectionHeader=({title,sub,action})=>(
   </div>
 );
 
-const Alert=({type="info",children})=>{
+const Alert=({type="info",children,onClose})=>{
   const t={info:{bg:C.infoBg,text:C.info,icon:"ℹ"},warning:{bg:C.warningBg,text:C.warning,icon:"⚠"},danger:{bg:C.dangerBg,text:C.danger,icon:"✕"},success:{bg:C.successBg,text:C.success,icon:"✓"}};
   const cfg=t[type];
-  return <div style={{background:cfg.bg,color:cfg.text,borderRadius:8,padding:"10px 14px",fontSize:13,fontWeight:500,display:"flex",gap:8,alignItems:"flex-start",marginBottom:16}}><span>{cfg.icon}</span><div>{children}</div></div>;
+  return <div style={{background:cfg.bg,color:cfg.text,borderRadius:8,padding:"10px 14px",fontSize:13,fontWeight:500,display:"flex",gap:8,alignItems:"flex-start",marginBottom:16}}>
+    <span style={{flexShrink:0}}>{cfg.icon}</span><div style={{flex:1}}>{children}</div>
+    {onClose&&<button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",color:cfg.text,fontSize:16,padding:0}}>×</button>}
+  </div>;
 };
 
-const MiniBar=({value,max,color=C.primary})=>(
-  <div style={{height:6,background:C.bg,borderRadius:3,width:"100%",marginTop:4}}>
-    <div style={{height:6,borderRadius:3,background:color,width:`${Math.min(100,(value/max)*100)}%`,transition:"width 0.3s"}}/>
+const UploadPlaceholder=({label="Document"})=>(
+  <div style={{border:`2px dashed ${C.border}`,borderRadius:8,padding:"20px",textAlign:"center",cursor:"pointer",background:C.bg}}
+    onClick={()=>alert("File upload will be available when connected to a backend storage service.")}>
+    <div style={{fontSize:24,marginBottom:6}}>📎</div>
+    <div style={{fontSize:13,color:C.textSub,fontWeight:600}}>Upload {label}</div>
+    <div style={{fontSize:11,color:C.textMuted,marginTop:4}}>Click to attach (placeholder — no storage yet)</div>
   </div>
 );
 
-// ─── GLOBAL SEED DATA ──────────────────────────────────────────────────────
-const CURRENCIES=["USD","GBP","EUR","CHF","JPY","CAD","AUD","INR","SGD","AED"];
-const ROLES=["Senior Regulatory Affairs Specialist","Regulatory Affairs Specialist","Clinical Writer","Senior Clinical Writer","Publishing Specialist","Project Manager","Principal Consultant","Associate Consultant"];
-const GRADES=["Associate","Specialist","Senior Specialist","Principal","Director","Senior Director"];
-const LOCATIONS=["US","UK","EU","India","Singapore","UAE"];
-const DIVISIONS=["Regulatory Affairs","Clinical Writing","Publishing","PV & Safety"];
-const DEPARTMENTS=["Global RA","CMC","Labelling","Clinical Operations","Medical Writing","PV Operations"];
-const MONTHS_2026=["Jan 2026","Feb 2026","Mar 2026","Apr 2026","May 2026","Jun 2026","Jul 2026","Aug 2026","Sep 2026","Oct 2026","Nov 2026","Dec 2026"];
-const CUR_MONTH_IDX=3;
-const FX_PAIRS=["GBP/USD","EUR/USD","CHF/USD","JPY/USD","CAD/USD","AUD/USD","INR/USD","SGD/USD","AED/USD"];
-const FX_RATES_MAP={"GBP":1.275,"EUR":1.082,"CHF":1.108,"JPY":0.0067,"CAD":0.735,"AUD":0.638,"INR":0.012,"SGD":0.742,"AED":0.272,"USD":1};
+const FormRow=({children,cols=2})=>(
+  <div style={{display:"grid",gridTemplateColumns:`repeat(${cols},1fr)`,gap:16,marginBottom:16}}>{children}</div>
+);
 
-// Tag master
-const TAGS={
-  division:DIVISIONS,
-  department:DEPARTMENTS,
-  country:["US","UK","Germany","France","Japan","India","Singapore","Australia","Canada","UAE"],
-  region:["North America","Europe","Asia Pacific","LATAM","Middle East","India"],
-  customerType:["Pharma","Biotech","MedTech","CRO","Generics","Academic"],
-  accountType:["Strategic","Standard","Growth","At Risk"],
+const FormSection=({title,children})=>(
+  <div style={{marginBottom:24}}>
+    <div style={{fontSize:12,fontWeight:700,color:C.textSub,textTransform:"uppercase",letterSpacing:0.8,marginBottom:12,paddingBottom:6,borderBottom:`1px solid ${C.border}`}}>{title}</div>
+    {children}
+  </div>
+);
+
+// ─── TAG MASTER DATA (source of truth for all dropdowns) ───────────────────
+const INITIAL_TAGS = {
+  "Work Country": ["India","China","USA","Canada","EU-UK","EU-Germany","EU-Poland","EU-Other","UAE","Japan","Korea","Other","Colombia","LatAm (Other)","Middle East","South Africa"],
+  "Region": ["AMR","EUA","MoW"],
+  "Division": ["MPR","MDV","CON","FDL","CFS","SLS"],
+  "Department": ["MPR-Artwork","MPR-Consulting","MPR-Excellence Group","MPR-Labelling","MPR-Medical and Scientific Communication","MPR-Medical Writing","MPR-Pharmacovigilance","MPR-Publishing and Submission","MPR-Regulatory Affairs","MDV-Regulatory Affairs Delivery","MDV-Excellence Group","MDV-Leadership Group","CON-Business Operations","CON-Chemical Safety Regulatory Affairs","CON-Cosmetics","CON-Food and Dietary Supplements","CON-Excellence Group","CON-Leadership Group","CFS-Administration","CFS-Compliance and Validation","CFS-Finance","CFS-Freyr Academy","CFS-Human Resources","CFS-IT","CFS-Legal","CFS-Marketing","CFS-Regional Operations","CFS-FreyrX","CFS-Leadership Team","CFS-Transition Management","FF-GRI","FF-RIMS","FF-SUBMISSIONS"],
+  "Service": ["MPR-Publishing","MPR-Submissions Planning","MPR-Label Change Management","MPR-Label Content Management Services","MPR-AW Change Management","MPR-Reg Affairs Strategy","MPR-Reg Affairs Submissions","MPR-Regulatory Strategy","MPR-Market Access","MPR-Local Reg Affairs","MDV-AW Change Management","MDV-Reg Affairs Submissions","MDV-Market Access","MDV-Local Reg Affairs","COS-Market Access","FDS-Market Access","COS-Reg Affairs","FDS-Reg Affairs","CSRA-Market Access","CSRA-Reg Affairs"],
+  "Customer Type": ["Strategic Accounts","Focussed Accounts","SMB"],
+  "Operations": ["Revenue","Cost"],
 };
 
-// Customers
-const CUSTOMERS=[
-  {id:"c1",name:"Johnson & Johnson",type:"Pharma",region:"North America",country:"US",status:"Active",strategic:true,revenue:2850000,projects:8,deliveryOwner:"Jane Smith"},
-  {id:"c2",name:"AstraZeneca",type:"Pharma",region:"Europe",country:"UK",status:"Active",strategic:true,revenue:1920000,projects:5,deliveryOwner:"Mike Kumar"},
-  {id:"c3",name:"GSK",type:"Pharma",region:"Europe",country:"UK",status:"Active",strategic:false,revenue:1340000,projects:4,deliveryOwner:"Sara Lee"},
-  {id:"c4",name:"Pfizer",type:"Pharma",region:"North America",country:"US",status:"Active",strategic:true,revenue:980000,projects:3,deliveryOwner:"Tom Raj"},
-  {id:"c5",name:"Novartis",type:"Pharma",region:"Europe",country:"Switzerland",status:"Active",strategic:false,revenue:760000,projects:3,deliveryOwner:"Sara Lee"},
-  {id:"c6",name:"Roche",type:"Pharma",region:"Europe",country:"Germany",status:"Active",strategic:false,revenue:640000,projects:2,deliveryOwner:"Mike Kumar"},
-  {id:"c7",name:"Merck",type:"Pharma",region:"North America",country:"US",status:"Active",strategic:false,revenue:520000,projects:2,deliveryOwner:"Tom Raj"},
-  {id:"c8",name:"Sanofi",type:"Pharma",region:"Europe",country:"France",status:"Active",strategic:false,revenue:410000,projects:2,deliveryOwner:"Jane Smith"},
-  {id:"c9",name:"Bayer",type:"Pharma",region:"Europe",country:"Germany",status:"Active",strategic:false,revenue:380000,projects:1,deliveryOwner:"Sara Lee"},
-  {id:"c10",name:"Abbott",type:"MedTech",region:"North America",country:"US",status:"Active",strategic:false,revenue:290000,projects:1,deliveryOwner:"Tom Raj"},
+// ─── FREYR ENTITIES (initial) ──────────────────────────────────────────────
+const INITIAL_ENTITIES = [
+  {id:"ent-1",name:"Freyr US",prefix:"FRUS",currency:"USD",address:"123 Business Ave, New York, NY 10001, USA",bankName:"",accountName:"",accountNumber:"",swift:"",iban:"",active:true},
+  {id:"ent-2",name:"Freyr India",prefix:"FRIN",currency:"INR",address:"456 Tech Park, Hyderabad, Telangana 500081, India",bankName:"",accountName:"",accountNumber:"",swift:"",iban:"",active:true},
+  {id:"ent-3",name:"Freyr Germany",prefix:"FRDE",currency:"EUR",address:"789 Business Strasse, Frankfurt, 60311, Germany",bankName:"",accountName:"",accountNumber:"",swift:"",iban:"",active:true},
 ];
 
-// Contracts
-const CONTRACTS=[
-  {id:"k1",customerId:"c1",customer:"Johnson & Johnson",ref:"MSA-JNJ-2024",type:"MSA",value:3200000,currency:"USD",start:"2024-01-01",end:"2026-12-31",status:"Active"},
-  {id:"k2",customerId:"c2",customer:"AstraZeneca",ref:"MSA-AZ-2024",type:"MSA",value:2100000,currency:"GBP",start:"2024-03-01",end:"2026-09-30",status:"Active"},
-  {id:"k3",customerId:"c3",customer:"GSK",ref:"MSA-GSK-2023",type:"MSA",value:1500000,currency:"GBP",start:"2023-07-01",end:"2026-06-30",status:"Active"},
-  {id:"k4",customerId:"c4",customer:"Pfizer",ref:"SOW-PFZ-2025",type:"SOW",value:1000000,currency:"USD",start:"2025-01-01",end:"2026-04-30",status:"Active"},
-  {id:"k5",customerId:"c5",customer:"Novartis",ref:"MSA-NOV-2024",type:"MSA",value:850000,currency:"EUR",start:"2024-06-01",end:"2026-12-31",status:"Active"},
-  {id:"k6",customerId:"c6",customer:"Roche",ref:"MSA-ROC-2025",type:"MSA",value:700000,currency:"EUR",start:"2025-01-01",end:"2026-12-31",status:"Active"},
-  {id:"k7",customerId:"c7",customer:"Merck",ref:"SOW-MRK-2025",type:"SOW",value:550000,currency:"USD",start:"2025-04-01",end:"2026-03-31",status:"Expired"},
+// ─── INITIAL USERS ─────────────────────────────────────────────────────────
+const INITIAL_USERS = [
+  {id:"usr-1",name:"Jane Smith",email:"jane.smith@freyr.com",role:"Delivery Owner",status:"Active"},
+  {id:"usr-2",name:"Mike Kumar",email:"mike.kumar@freyr.com",role:"Delivery Owner",status:"Active"},
+  {id:"usr-3",name:"Sara Lee",email:"sara.lee@freyr.com",role:"Delivery Owner",status:"Active"},
+  {id:"usr-4",name:"Tom Raj",email:"tom.raj@freyr.com",role:"Delivery Owner",status:"Active"},
+  {id:"usr-5",name:"Rachel Kumar",email:"rachel.kumar@freyr.com",role:"Portfolio Head",status:"Active"},
+  {id:"usr-6",name:"Amir Patel",email:"amir.patel@freyr.com",role:"Division Head",status:"Active"},
+  {id:"usr-7",name:"Sarah Chen",email:"sarah.chen@freyr.com",role:"Admin",status:"Active"},
+  {id:"usr-8",name:"David Osei",email:"david.osei@freyr.com",role:"Leadership",status:"Active"},
 ];
 
-// Projects
-const PROJECTS=[
-  {id:"p1",contractId:"k1",customer:"Johnson & Johnson",name:"J&J RA Global Support",division:"Regulatory Affairs",dept:"Global RA",status:"Active",deliveryOwner:"Jane Smith",start:"2024-01-15",end:"2026-12-31",forecast:1240000,actual:892000},
-  {id:"p2",contractId:"k2",customer:"AstraZeneca",name:"AZ Clinical Writing Programme",division:"Clinical Writing",dept:"Medical Writing",status:"Active",deliveryOwner:"Mike Kumar",start:"2024-03-01",end:"2026-09-30",forecast:960000,actual:621000},
-  {id:"p3",contractId:"k3",customer:"GSK",name:"GSK Publishing Suite",division:"Publishing",dept:"Labelling",status:"Active",deliveryOwner:"Sara Lee",start:"2023-07-01",end:"2026-06-30",forecast:680000,actual:512000},
-  {id:"p4",contractId:"k4",customer:"Pfizer",name:"Pfizer Labelling Hub",division:"Regulatory Affairs",dept:"Labelling",status:"Active",deliveryOwner:"Tom Raj",start:"2025-01-01",end:"2026-04-30",forecast:490000,actual:388000},
-  {id:"p5",contractId:"k5",customer:"Novartis",name:"Novartis PV Safety Review",division:"PV & Safety",dept:"PV Operations",status:"Active",deliveryOwner:"Sara Lee",start:"2024-06-01",end:"2026-12-31",forecast:380000,actual:265000},
-  {id:"p6",contractId:"k2",customer:"AstraZeneca",name:"AZ Regulatory Strategy",division:"Regulatory Affairs",dept:"CMC",status:"On Hold",deliveryOwner:"Mike Kumar",start:"2024-06-01",end:"2026-06-30",forecast:290000,actual:148000},
-  {id:"p7",contractId:"k6",customer:"Roche",name:"Roche RA Submissions",division:"Regulatory Affairs",dept:"Global RA",status:"Active",deliveryOwner:"Mike Kumar",start:"2025-01-01",end:"2026-12-31",forecast:320000,actual:198000},
-  {id:"p8",contractId:"k1",customer:"Johnson & Johnson",name:"J&J Clinical Writing Support",division:"Clinical Writing",dept:"Clinical Operations",status:"Active",deliveryOwner:"Jane Smith",start:"2024-07-01",end:"2026-12-31",forecast:410000,actual:287000},
-];
+const CURRENCIES = ["USD","GBP","EUR","CHF","JPY","CAD","AUD","INR","SGD","AED"];
+const CONTRACT_STATUSES = ["Draft","Active","On Hold","Closed","Cancelled"];
+const CUSTOMER_STATUSES = ["Active","Inactive"];
+const EMP_STATUSES = ["Active","Inactive","Notice","Contractor"];
+const PAYMENT_TERMS_OPTIONS = ["NET 30","NET 45","NET 60","NET 90","Custom"];
 
-// Service Lines
-const SERVICE_LINES_LIST=[
-  {id:"sl1",name:"HA Query Support",projectId:"p1",project:"J&J RA Global Support",customer:"Johnson & Johnson",commercialType:"T&M Managed",division:"Regulatory Affairs",dept:"Global RA",currency:"USD",deliveryOwner:"Jane Smith"},
-  {id:"sl2",name:"Regulatory Affairs Fixed",projectId:"p1",project:"J&J RA Global Support",customer:"Johnson & Johnson",commercialType:"Fixed Price",division:"Regulatory Affairs",dept:"CMC",currency:"USD",deliveryOwner:"Jane Smith"},
-  {id:"sl3",name:"Clinical Writing Support",projectId:"p2",project:"AZ Clinical Writing Programme",customer:"AstraZeneca",commercialType:"T&M Staffing",division:"Clinical Writing",dept:"Medical Writing",currency:"GBP",deliveryOwner:"Mike Kumar"},
-  {id:"sl4",name:"Publishing Unit Work",projectId:"p3",project:"GSK Publishing Suite",customer:"GSK",commercialType:"Unit-Based",division:"Publishing",dept:"Labelling",currency:"GBP",deliveryOwner:"Sara Lee"},
-  {id:"sl5",name:"PV Safety Review",projectId:"p5",project:"Novartis PV Safety Review",customer:"Novartis",commercialType:"Recurring",division:"PV & Safety",dept:"PV Operations",currency:"EUR",deliveryOwner:"Sara Lee"},
-  {id:"sl6",name:"RA Strategy Advisory",projectId:"p6",project:"AZ Regulatory Strategy",customer:"AstraZeneca",commercialType:"T&M Managed",division:"Regulatory Affairs",dept:"CMC",currency:"GBP",deliveryOwner:"Mike Kumar"},
-  {id:"sl7",name:"Roche Submission Support",projectId:"p7",project:"Roche RA Submissions",customer:"Roche",commercialType:"Fixed Price",division:"Regulatory Affairs",dept:"Global RA",currency:"EUR",deliveryOwner:"Mike Kumar"},
-  {id:"sl8",name:"J&J Clinical Writing",projectId:"p8",project:"J&J Clinical Writing Support",customer:"Johnson & Johnson",commercialType:"T&M Staffing",division:"Clinical Writing",dept:"Clinical Operations",currency:"USD",deliveryOwner:"Jane Smith"},
-];
-
-// Invoices
-const INVOICES=[
-  {id:"i1",number:"FRUS20261831",customer:"Johnson & Johnson",project:"J&J RA Global Support",serviceLine:"HA Query Support",amount:148500,currency:"USD",status:"Paid",issued:"2026-01-15",due:"2026-02-15",paid:"2026-02-10",odooSync:"Synced"},
-  {id:"i2",number:"FRUS20261832",customer:"Johnson & Johnson",project:"J&J RA Global Support",serviceLine:"Regulatory Affairs Fixed",amount:45000,currency:"USD",status:"Paid",issued:"2026-02-01",due:"2026-03-01",paid:"2026-02-28",odooSync:"Synced"},
-  {id:"i3",number:"FRGB20261201",customer:"AstraZeneca",project:"AZ Clinical Writing Programme",serviceLine:"Clinical Writing Support",amount:82400,currency:"GBP",status:"Outstanding",issued:"2026-03-01",due:"2026-04-01",paid:null,odooSync:"Synced"},
-  {id:"i4",number:"FRGB20261202",customer:"GSK",project:"GSK Publishing Suite",serviceLine:"Publishing Unit Work",amount:54200,currency:"GBP",status:"Overdue",issued:"2026-02-15",due:"2026-03-15",paid:null,odooSync:"Failed"},
-  {id:"i5",number:"FREU20261101",customer:"Novartis",project:"Novartis PV Safety Review",serviceLine:"PV Safety Review",amount:75000,currency:"EUR",status:"Paid",issued:"2026-01-20",due:"2026-02-20",paid:"2026-02-18",odooSync:"Synced"},
-  {id:"i6",number:"FRUS20261833",customer:"Pfizer",project:"Pfizer Labelling Hub",serviceLine:"Pfizer RA",amount:122000,currency:"USD",status:"Outstanding",issued:"2026-03-15",due:"2026-04-15",paid:null,odooSync:"Synced"},
-  {id:"i7",number:"FRUS20261834",customer:"Johnson & Johnson",project:"J&J Clinical Writing Support",serviceLine:"J&J Clinical Writing",amount:98000,currency:"USD",status:"Paid",issued:"2026-03-01",due:"2026-04-01",paid:"2026-03-28",odooSync:"Synced"},
-];
-
-// Rate Card
-const initRates=[
-  {id:"r1",role:"Senior Regulatory Affairs Specialist",grade:"Senior Specialist",location:"US",currency:"USD",unit:"Hour",rate:185,effectiveFrom:"2026-01-01",effectiveTo:"",status:"Active"},
-  {id:"r2",role:"Regulatory Affairs Specialist",grade:"Specialist",location:"UK",currency:"GBP",unit:"Hour",rate:120,effectiveFrom:"2026-01-01",effectiveTo:"",status:"Active"},
-  {id:"r3",role:"Clinical Writer",grade:"Specialist",location:"US",currency:"USD",unit:"Hour",rate:145,effectiveFrom:"2026-01-01",effectiveTo:"",status:"Active"},
-  {id:"r4",role:"Senior Clinical Writer",grade:"Senior Specialist",location:"UK",currency:"GBP",unit:"Hour",rate:155,effectiveFrom:"2026-01-01",effectiveTo:"",status:"Active"},
-  {id:"r5",role:"Publishing Specialist",grade:"Specialist",location:"India",currency:"USD",unit:"Page",rate:45,effectiveFrom:"2026-01-01",effectiveTo:"",status:"Active"},
-  {id:"r6",role:"Project Manager",grade:"Principal",location:"US",currency:"USD",unit:"Hour",rate:210,effectiveFrom:"2026-01-01",effectiveTo:"",status:"Active"},
-  {id:"r7",role:"Principal Consultant",grade:"Director",location:"EU",currency:"EUR",unit:"Day",rate:1800,effectiveFrom:"2026-01-01",effectiveTo:"",status:"Active"},
-  {id:"r8",role:"Associate Consultant",grade:"Associate",location:"India",currency:"USD",unit:"Hour",rate:55,effectiveFrom:"2025-01-01",effectiveTo:"2025-12-31",status:"Retired"},
-];
-const initOverrides=[
-  {id:"o1",serviceLine:"HA Query Support",project:"J&J RA Global Support",customer:"Johnson & Johnson",role:"Senior Regulatory Affairs Specialist",stdRate:185,overrideRate:195,currency:"USD",unit:"Hour",deviation:5.4,reason:"Strategic account premium",effectiveFrom:"2026-01-01"},
-  {id:"o2",serviceLine:"Clinical Writing Support",project:"AZ Clinical Writing Programme",customer:"AstraZeneca",role:"Senior Clinical Writer",stdRate:155,overrideRate:130,currency:"GBP",unit:"Hour",deviation:-16.1,reason:"Volume discount — 2000+ hrs/yr commitment",effectiveFrom:"2026-01-01"},
-  {id:"o3",serviceLine:"PV Safety Review",project:"Novartis PV Safety Review",customer:"Novartis",role:"Principal Consultant",stdRate:1800,overrideRate:1950,currency:"EUR",unit:"Day",deviation:8.3,reason:"Specialist premium — rare expertise",effectiveFrom:"2026-03-01"},
-];
-const initAlerts=[
-  {id:"a1",serviceLine:"HA Query Support",project:"J&J RA Global Support",deliveryOwner:"Jane Smith",role:"Senior Regulatory Affairs Specialist",oldRate:175,newRate:185,currency:"USD",effectiveDate:"2026-01-01",status:"Pending",daysOverdue:94},
-  {id:"a2",serviceLine:"Clinical Writing Support",project:"AZ Clinical Writing Programme",deliveryOwner:"Mike Kumar",role:"Senior Clinical Writer",oldRate:145,newRate:155,currency:"GBP",effectiveDate:"2026-01-01",status:"Acknowledged",daysOverdue:0},
-  {id:"a3",serviceLine:"PV Safety Review",project:"Novartis PV Safety Review",deliveryOwner:"Sara Lee",role:"Principal Consultant",oldRate:1700,newRate:1800,currency:"EUR",effectiveDate:"2026-01-01",status:"Pending",daysOverdue:94},
-  {id:"a4",serviceLine:"Regulatory Affairs Fixed",project:"J&J RA Global Support",deliveryOwner:"Jane Smith",role:"Project Manager",oldRate:195,newRate:210,currency:"USD",effectiveDate:"2026-01-01",status:"Pending",daysOverdue:94},
-];
-
-// FX rates
-const initFxRates=[
-  {id:"fx1",pair:"GBP/USD",from:"GBP",to:"USD",month:"Jan 2026",rate:1.272,enteredBy:"Admin",enteredAt:"2026-02-05"},
-  {id:"fx2",pair:"GBP/USD",from:"GBP",to:"USD",month:"Feb 2026",rate:1.268,enteredBy:"Admin",enteredAt:"2026-03-04"},
-  {id:"fx3",pair:"GBP/USD",from:"GBP",to:"USD",month:"Mar 2026",rate:1.275,enteredBy:"Admin",enteredAt:"2026-04-03"},
-  {id:"fx4",pair:"EUR/USD",from:"EUR",to:"USD",month:"Jan 2026",rate:1.084,enteredBy:"Admin",enteredAt:"2026-02-05"},
-  {id:"fx5",pair:"EUR/USD",from:"EUR",to:"USD",month:"Feb 2026",rate:1.079,enteredBy:"Admin",enteredAt:"2026-03-04"},
-  {id:"fx6",pair:"EUR/USD",from:"EUR",to:"USD",month:"Mar 2026",rate:1.082,enteredBy:"Admin",enteredAt:"2026-04-03"},
-];
-
-// Forecast seed
-const buildForecastEntries=(commercialType)=>{
-  const entries={};
-  MONTHS_2026.forEach((m,i)=>{
-    const isPast=i<CUR_MONTH_IDX;
-    let qty=null,rate=null,amount=0,actual=null;
-    if(["T&M Managed","T&M Staffing"].includes(commercialType)){qty=80+Math.round(Math.random()*40);rate=185;amount=qty*rate;actual=isPast?Math.round(amount*(0.85+Math.random()*0.25)):null;}
-    else if(commercialType==="Fixed Price"){amount=[45000,0,60000,0,45000,0,60000,0,45000,0,60000,30000][i]||0;actual=isPast&&amount>0?Math.round(amount*(0.9+Math.random()*0.15)):null;}
-    else if(commercialType==="Unit-Based"){qty=200+Math.round(Math.random()*100);rate=45;amount=qty*rate;actual=isPast?Math.round(amount*(0.88+Math.random()*0.2)):null;}
-    else{amount=25000;actual=isPast?25000:null;}
-    entries[m]={qty,rate,amount:Math.round(amount),actual,note:"",locked:isPast};
-  });
-  return entries;
-};
-const initForecastVersions={
-  sl1:[{id:"v1",name:"Baseline",type:"Baseline",createdBy:"Jane Smith",createdAt:"2026-01-10",reason:"Initial forecast",locked:true,isWorking:false},{id:"v2",name:"Q2 Revision",type:"Working",createdBy:"Jane Smith",createdAt:"2026-04-01",reason:"Scope increase",locked:false,isWorking:true}],
-  sl2:[{id:"v3",name:"Baseline",type:"Baseline",createdBy:"Jane Smith",createdAt:"2026-01-10",reason:"Initial forecast",locked:true,isWorking:false},{id:"v4",name:"Q1 Revision",type:"Working",createdBy:"Jane Smith",createdAt:"2026-02-15",reason:"Milestone replan",locked:false,isWorking:true}],
-  sl3:[{id:"v5",name:"Baseline",type:"Baseline",createdBy:"Mike Kumar",createdAt:"2026-01-12",reason:"Initial forecast",locked:true,isWorking:false},{id:"v6",name:"Q2 Revision",type:"Working",createdBy:"Mike Kumar",createdAt:"2026-04-02",reason:"Resource mix change",locked:false,isWorking:true}],
-  sl4:[{id:"v7",name:"Baseline",type:"Baseline",createdBy:"Sara Lee",createdAt:"2026-01-15",reason:"Initial forecast",locked:true,isWorking:false},{id:"v8",name:"Q2 Revision",type:"Working",createdBy:"Sara Lee",createdAt:"2026-04-03",reason:"Page volume revised",locked:false,isWorking:true}],
-  sl5:[{id:"v9",name:"Baseline",type:"Baseline",createdBy:"Sara Lee",createdAt:"2026-01-20",reason:"Initial forecast",locked:true,isWorking:false},{id:"v10",name:"Q2 Revision",type:"Working",createdBy:"Sara Lee",createdAt:"2026-04-05",reason:"Extended contract",locked:false,isWorking:true}],
-};
-const initForecastEntries={
-  sl1:{v1:buildForecastEntries("T&M Managed"),v2:buildForecastEntries("T&M Managed")},
-  sl2:{v3:buildForecastEntries("Fixed Price"),v4:buildForecastEntries("Fixed Price")},
-  sl3:{v5:buildForecastEntries("T&M Staffing"),v6:buildForecastEntries("T&M Staffing")},
-  sl4:{v7:buildForecastEntries("Unit-Based"),v8:buildForecastEntries("Unit-Based")},
-  sl5:{v9:buildForecastEntries("Recurring"),v10:buildForecastEntries("Recurring")},
-};
-
-// Users
-const USERS=[
-  {id:"u1",name:"Jane Smith",email:"jane.smith@freyr.com",role:"Delivery Owner",division:"Regulatory Affairs",status:"Active",lastLogin:"2026-04-09",scope:["J&J","Sanofi"]},
-  {id:"u2",name:"Mike Kumar",email:"mike.kumar@freyr.com",role:"Delivery Owner",division:"Clinical Writing",status:"Active",lastLogin:"2026-04-08",scope:["AstraZeneca","Roche"]},
-  {id:"u3",name:"Sara Lee",email:"sara.lee@freyr.com",role:"Delivery Owner",division:"PV & Safety",status:"Active",lastLogin:"2026-04-07",scope:["GSK","Novartis","Bayer"]},
-  {id:"u4",name:"Tom Raj",email:"tom.raj@freyr.com",role:"Delivery Owner",division:"Regulatory Affairs",status:"Active",lastLogin:"2026-04-06",scope:["Pfizer","Merck","Abbott"]},
-  {id:"u5",name:"Rachel Kumar",email:"rachel.kumar@freyr.com",role:"Portfolio Head",division:"Pharma",status:"Active",lastLogin:"2026-04-09",scope:["All Pharma"]},
-  {id:"u6",name:"Amir Patel",email:"amir.patel@freyr.com",role:"Division Head",division:"Regulatory Affairs",status:"Active",lastLogin:"2026-04-09",scope:["Regulatory Affairs"]},
-  {id:"u7",name:"Sarah Chen",email:"sarah.chen@freyr.com",role:"Admin",division:"All",status:"Active",lastLogin:"2026-04-09",scope:["All"]},
-  {id:"u8",name:"David Osei",email:"david.osei@freyr.com",role:"Leadership",division:"All",status:"Active",lastLogin:"2026-04-08",scope:["All"]},
-  {id:"u9",name:"Priya Sharma",email:"priya.sharma@freyr.com",role:"Delivery Owner",division:"Publishing",status:"Pending",lastLogin:"—",scope:[]},
-];
-
-// Tag reviews
-const initTagReviews=[
-  {id:"tr1",project:"J&J RA Global Support",customer:"Johnson & Johnson",deliveryOwner:"Jane Smith",trigger:"Scheduled",triggerDetail:"Monthly review — Apr 2026",dueDate:"2026-04-15",status:"Overdue",daysOverdue:0,tags:{division:"Regulatory Affairs",dept:"Global RA",country:"US",region:"North America"}},
-  {id:"tr2",project:"AZ Regulatory Strategy",customer:"AstraZeneca",deliveryOwner:"Mike Kumar",trigger:"Status Change",triggerDetail:"Active → On Hold (2026-03-20)",dueDate:"2026-03-27",status:"Overdue",daysOverdue:13,tags:{division:"Regulatory Affairs",dept:"CMC",country:"UK",region:"Europe"}},
-  {id:"tr3",project:"GSK Publishing Suite",customer:"GSK",deliveryOwner:"Sara Lee",trigger:"Scheduled",triggerDetail:"Monthly review — Mar 2026",dueDate:"2026-03-31",status:"Overdue",daysOverdue:9,tags:{division:"Publishing",dept:"Labelling",country:"UK",region:"Europe"}},
-  {id:"tr4",project:"Pfizer Labelling Hub",customer:"Pfizer",deliveryOwner:"Tom Raj",trigger:"Manual",triggerDetail:"Initiated by Admin",dueDate:"2026-04-20",status:"Pending",daysOverdue:0,tags:{division:"Regulatory Affairs",dept:"Labelling",country:"US",region:"North America"}},
-  {id:"tr5",project:"Novartis PV Safety Review",customer:"Novartis",deliveryOwner:"Sara Lee",trigger:"Scheduled",triggerDetail:"Monthly review — Apr 2026",dueDate:"2026-04-15",status:"Pending",daysOverdue:0,tags:{division:"PV & Safety",dept:"PV Operations",country:"Switzerland",region:"Europe"}},
-];
-
-// Live aggregation helpers
-const toUSD=(amount,currency)=>amount*(FX_RATES_MAP[currency]||1);
-const totalForecastUSD=()=>PROJECTS.reduce((s,p)=>s+toUSD(p.forecast,CONTRACTS.find(k=>k.id===p.contractId)?.currency||"USD"),0);
-const totalActualUSD=()=>PROJECTS.reduce((s,p)=>s+toUSD(p.actual,CONTRACTS.find(k=>k.id===p.contractId)?.currency||"USD"),0);
-const invoiceTotalUSD=()=>INVOICES.reduce((s,i)=>s+toUSD(i.amount,i.currency),0);
-const invoicePaidUSD=()=>INVOICES.filter(i=>i.status==="Paid").reduce((s,i)=>s+toUSD(i.amount,i.currency),0);
-const invoiceOutstandingUSD=()=>INVOICES.filter(i=>["Outstanding","Overdue"].includes(i.status)).reduce((s,i)=>s+toUSD(i.amount,i.currency),0);
-const getRealization=()=>totalForecastUSD()>0?totalActualUSD()/totalForecastUSD()*100:0;
-
-// DO-scoped helpers
-const DO_SCOPE={
-  "Jane Smith":["c1","c8"],
-  "Mike Kumar":["c2","c6"],
-  "Sara Lee":["c3","c5","c9"],
-  "Tom Raj":["c4","c7","c10"],
-};
-const getDoProjects=(doName)=>PROJECTS.filter(p=>p.deliveryOwner===doName);
-const getDoForecast=(doName)=>getDoProjects(doName).reduce((s,p)=>s+toUSD(p.forecast,CONTRACTS.find(k=>k.id===p.contractId)?.currency||"USD"),0);
-const getDoActual=(doName)=>getDoProjects(doName).reduce((s,p)=>s+toUSD(p.actual,CONTRACTS.find(k=>k.id===p.contractId)?.currency||"USD"),0);
-
-// Monthly trend data (derived from projects)
-const TREND_DATA=MONTHS_2026.slice(0,CUR_MONTH_IDX+1).map((m,i)=>{
-  const fc=totalForecastUSD()/12;
-  const act=i<CUR_MONTH_IDX?totalActualUSD()/CUR_MONTH_IDX*(0.9+Math.random()*0.2):null;
-  return{month:m,forecast:Math.round(fc),actual:act?Math.round(act):null};
-});
-
-// ─── NAV ──────────────────────────────────────────────────────────────────
-const NAV=[
+// ─── NAV ───────────────────────────────────────────────────────────────────
+const NAV = [
   {key:"dashboard",label:"Dashboard",icon:"◼",group:"Overview"},
-  {key:"do-dashboard",label:"DO Dashboard",icon:"👤",group:"Dashboards"},
-  {key:"ph-dashboard",label:"Portfolio Head",icon:"📂",group:"Dashboards"},
-  {key:"dh-dashboard",label:"Division Head",icon:"🏛",group:"Dashboards"},
-  {key:"admin-dashboard",label:"Admin Dashboard",icon:"⚙",group:"Dashboards"},
-  {key:"leadership",label:"Leadership",icon:"👁",group:"Dashboards"},
   {key:"customers",label:"Customers",icon:"🏢",group:"Delivery"},
   {key:"contracts",label:"Contracts",icon:"📋",group:"Delivery"},
   {key:"projects",label:"Projects",icon:"📁",group:"Delivery"},
@@ -343,1627 +209,1220 @@ const NAV=[
   {key:"forecast",label:"Forecast",icon:"📊",group:"Finance"},
   {key:"invoices",label:"Invoices",icon:"🧾",group:"Finance"},
   {key:"exceptions",label:"Exceptions",icon:"⚠",group:"Reporting"},
+  {key:"employees",label:"Employees",icon:"👥",group:"People"},
   {key:"tag-reviews",label:"Tag Reviews",icon:"🔁",group:"Admin"},
-  {key:"users",label:"User Management",icon:"👥",group:"Admin"},
+  {key:"users",label:"User Management",icon:"👤",group:"Admin"},
   {key:"tags",label:"Tag Master",icon:"🏷",group:"Admin"},
+  {key:"settings",label:"Settings",icon:"⚙",group:"Admin"},
 ];
 
-// ─── MINI CHART ────────────────────────────────────────────────────────────
-const MiniTrendChart=({data,height=80,showLabels=false})=>{
-  const max=Math.max(...data.map(d=>Math.max(d.forecast||0,d.actual||0)),1);
-  const w=100/data.length;
-  return(
-    <svg viewBox={`0 0 ${data.length*40} ${height+20}`} style={{width:"100%",height:height+20}}>
-      {data.map((d,i)=>{
-        const x=i*40+20;
-        const fh=(d.forecast/max)*(height-10);
-        const ah=d.actual?(d.actual/max)*(height-10):0;
-        return(
-          <g key={i}>
-            <rect x={x-10} y={height-fh} width={8} height={fh} fill={C.primaryLight} rx={2}/>
-            {d.actual&&<rect x={x+2} y={height-ah} width={8} height={ah} fill={C.primary} rx={2}/>}
-            {showLabels&&<text x={x} y={height+14} textAnchor="middle" fontSize={8} fill={C.textMuted}>{d.month.slice(0,3)}</text>}
-          </g>
-        );
-      })}
-    </svg>
-  );
-};
+// ─── APP STATE (lifted to top level for cross-module access) ───────────────
+// All state is managed in the App component and passed down as props.
 
-// ─── DASHBOARD (main overview) ─────────────────────────────────────────────
-function Dashboard({onNav}){
-  const fc=totalForecastUSD(),ac=totalActualUSD(),real=getRealization();
-  const invOut=invoiceOutstandingUSD(),invPaid=invoicePaidUSD();
-  const overdueTR=initTagReviews.filter(r=>r.status==="Overdue").length;
-  const failedSync=INVOICES.filter(i=>i.odooSync==="Failed").length;
+// ═══════════════════════════════════════════════════════════════════════════
+// TAG MASTER MODULE
+// ═══════════════════════════════════════════════════════════════════════════
+function TagMaster({tags,setTags}){
+  const [activeCategory,setActiveCategory]=useState(Object.keys(tags)[0]);
+  const [showNewCat,setShowNewCat]=useState(false);
+  const [showNewTag,setShowNewTag]=useState(false);
+  const [newCatName,setNewCatName]=useState("");
+  const [newTagVal,setNewTagVal]=useState("");
+  const [search,setSearch]=useState("");
+  const [editingTag,setEditingTag]=useState(null);
+  const [editVal,setEditVal]=useState("");
 
-  return(
-    <div>
-      <SectionHeader title="Platform Overview" sub="Freyr Pulse — April 2026 · All figures in USD"/>
-      <div style={{display:"flex",gap:16,marginBottom:24,flexWrap:"wrap"}}>
-        <KpiCard label="Total Forecast 2026" value={fmtM(fc)} sub="All service lines · Working version" accent={C.primary} delta={8.3}/>
-        <KpiCard label="Actuals YTD (Q1)" value={fmtM(ac)} sub="Jan–Mar 2026 billed" accent={C.success}/>
-        <KpiCard label="Realization YTD" value={pct(real)} sub="Actuals / Forecast" accent={real>=92?C.success:real>=80?C.warning:C.danger} badge={<Badge color={real>=92?"green":real>=80?"amber":"red"} dot>{real>=92?"On track":real>=80?"Watch":"At risk"}</Badge>}/>
-        <KpiCard label="Outstanding Invoices" value={fmtM(invOut)} sub={`${INVOICES.filter(i=>i.status==="Overdue").length} overdue`} accent={C.warning}/>
-        <KpiCard label="Active Customers" value={CUSTOMERS.filter(c=>c.status==="Active").length} sub={`${CUSTOMERS.filter(c=>c.strategic).length} strategic accounts`} accent={C.primary}/>
-      </div>
+  const filtered=(tags[activeCategory]||[]).filter(t=>t.toLowerCase().includes(search.toLowerCase()));
 
-      <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:20,marginBottom:20}}>
-        <Card>
-          <div style={{fontWeight:700,marginBottom:12}}>Forecast vs Actuals — 2026 YTD</div>
-          <MiniTrendChart data={TREND_DATA} height={120} showLabels/>
-          <div style={{display:"flex",gap:16,marginTop:8,fontSize:12,color:C.textSub}}>
-            <span><span style={{display:"inline-block",width:12,height:12,background:C.primaryLight,borderRadius:2,marginRight:4}}/>Forecast</span>
-            <span><span style={{display:"inline-block",width:12,height:12,background:C.primary,borderRadius:2,marginRight:4}}/>Actual</span>
-          </div>
-        </Card>
-        <Card>
-          <div style={{fontWeight:700,marginBottom:12}}>Action Items</div>
-          {[
-            {label:`${failedSync} Odoo sync failure${failedSync!==1?"s":""}`,color:"red",action:"Fix",page:"exceptions"},
-            {label:`${INVOICES.filter(i=>i.status==="Overdue").length} overdue invoices`,color:"red",action:"View",page:"invoices"},
-            {label:`${overdueTR} overdue tag reviews`,color:"amber",action:"Review",page:"tag-reviews"},
-            {label:`3 pending rate alerts`,color:"amber",action:"View",page:"rate-card"},
-            {label:`2 contracts expiring <30d`,color:"amber",action:"View",page:"contracts"},
-            {label:`Apr 2026 FX rates missing`,color:"blue",action:"Enter",page:"fx-rates"},
-          ].map((item,i)=>(
-            <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 0",borderBottom:`1px solid ${C.border}`}}>
-              <div style={{display:"flex",alignItems:"center",gap:8}}>
-                <span style={{width:8,height:8,borderRadius:"50%",background:C[item.color]||C.primary,flexShrink:0}}/>
-                <span style={{fontSize:13,color:C.text}}>{item.label}</span>
-              </div>
-              <Btn size="sm" variant="ghost" onClick={()=>onNav(item.page)}>{item.action} →</Btn>
-            </div>
-          ))}
-        </Card>
-      </div>
+  const addCategory=()=>{
+    if(!newCatName.trim()||tags[newCatName])return;
+    setTags(p=>({...p,[newCatName.trim()]:[]}));
+    setActiveCategory(newCatName.trim());
+    setNewCatName("");setShowNewCat(false);
+  };
 
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20}}>
-        <Card>
-          <div style={{fontWeight:700,marginBottom:12}}>Top Customers by Forecast</div>
-          <Table cols={[
-            {key:"name",label:"Customer"},
-            {key:"forecast",label:"Forecast",right:true,render:r=><strong>{fmtM(r.revenue)}</strong>},
-            {key:"real",label:"Realization",right:true,render:r=>{const real=r.actual/r.revenue*100||88;return<Badge color={real>=92?"green":real>=80?"amber":"red"}>{pct(real)}</Badge>;}},
-          ]} rows={CUSTOMERS.slice(0,5).map(c=>({...c,actual:c.revenue*0.88}))}/>
-        </Card>
-        <Card>
-          <div style={{fontWeight:700,marginBottom:12}}>Revenue by Division</div>
-          {DIVISIONS.map((div,i)=>{
-            const divProjects=PROJECTS.filter(p=>p.division===div);
-            const divFc=divProjects.reduce((s,p)=>s+toUSD(p.forecast,CONTRACTS.find(k=>k.id===p.contractId)?.currency||"USD"),0);
-            const divAc=divProjects.reduce((s,p)=>s+toUSD(p.actual,CONTRACTS.find(k=>k.id===p.contractId)?.currency||"USD"),0);
-            const colors=[C.primary,C.success,C.warning,C.purple];
-            return(
-              <div key={div} style={{marginBottom:14}}>
-                <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4}}>
-                  <span style={{fontWeight:600}}>{div}</span>
-                  <span style={{color:C.textSub}}>{fmtM(divFc)} · {pct(divFc>0?divAc/divFc*100:0)} real.</span>
-                </div>
-                <MiniBar value={divFc} max={totalForecastUSD()} color={colors[i]}/>
-              </div>
-            );
-          })}
-        </Card>
-      </div>
-    </div>
-  );
-}
+  const addTag=()=>{
+    if(!newTagVal.trim())return;
+    if((tags[activeCategory]||[]).includes(newTagVal.trim())){alert("Tag already exists in this category.");return;}
+    setTags(p=>({...p,[activeCategory]:[...(p[activeCategory]||[]),newTagVal.trim()]}));
+    setNewTagVal("");setShowNewTag(false);
+  };
 
-// ─── DO DASHBOARD ──────────────────────────────────────────────────────────
-function DODashboard(){
-  const doName="Jane Smith";
-  const myProjects=getDoProjects(doName);
-  const myFc=getDoForecast(doName),myAc=getDoActual(doName);
-  const myReal=myFc>0?myAc/myFc*100:0;
-  const myInvoices=INVOICES.filter(i=>["Johnson & Johnson","Sanofi"].includes(i.customer));
-  const myOutstanding=myInvoices.filter(i=>["Outstanding","Overdue"].includes(i.status)).reduce((s,i)=>s+toUSD(i.amount,i.currency),0);
-  const myReviews=initTagReviews.filter(r=>r.deliveryOwner===doName);
+  const removeTag=(cat,tag)=>{
+    if(!window.confirm(`Remove "${tag}" from ${cat}? This may affect existing records.`))return;
+    setTags(p=>({...p,[cat]:p[cat].filter(t=>t!==tag)}));
+  };
 
-  return(
-    <div>
-      <SectionHeader title="My Dashboard" sub={`${doName} · Delivery Owner · April 2026`}/>
-      <div style={{display:"flex",gap:16,marginBottom:24,flexWrap:"wrap"}}>
-        <KpiCard label="My Forecast 2026" value={fmtM(myFc)} sub="All my service lines" accent={C.primary}/>
-        <KpiCard label="Actuals YTD" value={fmtM(myAc)} sub="Jan–Mar 2026" accent={C.success}/>
-        <KpiCard label="Realization" value={pct(myReal)} sub="Actuals / Forecast" accent={myReal>=92?C.success:myReal>=80?C.warning:C.danger} badge={<Badge color={myReal>=92?"green":myReal>=80?"amber":"red"} dot>{myReal>=92?"On track":"Watch"}</Badge>}/>
-        <KpiCard label="Outstanding" value={fmtM(myOutstanding)} sub="Pending payment" accent={C.warning}/>
-      </div>
-
-      <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:20,marginBottom:20}}>
-        <Card>
-          <div style={{fontWeight:700,marginBottom:12}}>My Projects</div>
-          <Table cols={[
-            {key:"name",label:"Project"},
-            {key:"customer",label:"Customer"},
-            {key:"status",label:"Status",render:r=><Badge color={r.status==="Active"?"green":r.status==="On Hold"?"amber":"gray"} dot>{r.status}</Badge>},
-            {key:"forecast",label:"Forecast",right:true,render:r=><span>{fmtM(toUSD(r.forecast,CONTRACTS.find(k=>k.id===r.contractId)?.currency||"USD"))}</span>},
-            {key:"actual",label:"Actual YTD",right:true,render:r=><strong>{fmtM(toUSD(r.actual,CONTRACTS.find(k=>k.id===r.contractId)?.currency||"USD"))}</strong>},
-            {key:"real",label:"Real.",right:true,render:r=>{const rl=r.actual/r.forecast*100;return<Badge color={rl>=92?"green":rl>=80?"amber":"red"}>{pct(rl)}</Badge>;}},
-          ]} rows={myProjects}/>
-        </Card>
-        <Card>
-          <div style={{fontWeight:700,marginBottom:12}}>Action Items</div>
-          {myReviews.filter(r=>r.status==="Overdue").map((r,i)=>(
-            <div key={i} style={{padding:"8px 0",borderBottom:`1px solid ${C.border}`}}>
-              <div style={{fontSize:12,fontWeight:600,color:C.danger}}>⚠ Overdue Tag Review</div>
-              <div style={{fontSize:12,color:C.textSub}}>{r.project}</div>
-              <div style={{fontSize:11,color:C.textMuted}}>{r.triggerDetail}</div>
-            </div>
-          ))}
-          {myInvoices.filter(i=>i.status==="Overdue").map((inv,i)=>(
-            <div key={i} style={{padding:"8px 0",borderBottom:`1px solid ${C.border}`}}>
-              <div style={{fontSize:12,fontWeight:600,color:C.warning}}>⚠ Overdue Invoice</div>
-              <div style={{fontSize:12,color:C.textSub}}>{inv.number} · {inv.customer}</div>
-            </div>
-          ))}
-          {initAlerts.filter(a=>a.deliveryOwner===doName&&a.status==="Pending").map((a,i)=>(
-            <div key={i} style={{padding:"8px 0",borderBottom:`1px solid ${C.border}`}}>
-              <div style={{fontSize:12,fontWeight:600,color:C.info}}>ℹ Rate Alert</div>
-              <div style={{fontSize:12,color:C.textSub}}>{a.serviceLine}</div>
-            </div>
-          ))}
-        </Card>
-      </div>
-
-      <Card>
-        <div style={{fontWeight:700,marginBottom:12}}>My Tag Reviews</div>
-        <Table cols={[
-          {key:"project",label:"Project"},
-          {key:"trigger",label:"Trigger",render:r=><Badge color={r.trigger==="Status Change"?"amber":"blue"}>{r.trigger}</Badge>},
-          {key:"dueDate",label:"Due Date"},
-          {key:"status",label:"Status",render:r=><Badge color={r.status==="Overdue"?"red":"amber"} dot>{r.status}</Badge>},
-          {key:"actions",label:"",render:r=><Btn size="sm">Start Review</Btn>},
-        ]} rows={myReviews}/>
-      </Card>
-    </div>
-  );
-}
-
-// ─── PORTFOLIO HEAD DASHBOARD ──────────────────────────────────────────────
-function PHDashboard(){
-  const dos=["Jane Smith","Mike Kumar","Sara Lee","Tom Raj"];
-  const totalFc=dos.reduce((s,d)=>s+getDoForecast(d),0);
-  const totalAc=dos.reduce((s,d)=>s+getDoActual(d),0);
-  const real=totalFc>0?totalAc/totalFc*100:0;
-  const doColors={"Jane Smith":C.success,"Mike Kumar":C.primary,"Sara Lee":C.warning,"Tom Raj":C.danger};
-  const doReals=dos.map(d=>{const f=getDoForecast(d),a=getDoActual(d);return{name:d,fc:f,ac:a,real:f>0?a/f*100:0,projects:getDoProjects(d).length};});
-
-  return(
-    <div>
-      <SectionHeader title="Portfolio Head Dashboard" sub="Rachel Kumar · Pharma & Biotech Portfolio · April 2026"/>
-      <div style={{display:"flex",gap:16,marginBottom:24,flexWrap:"wrap"}}>
-        <KpiCard label="Portfolio Forecast" value={fmtM(totalFc)} sub="All DOs combined" accent={C.primary}/>
-        <KpiCard label="Actuals YTD" value={fmtM(totalAc)} sub="Jan–Mar 2026" accent={C.success}/>
-        <KpiCard label="Portfolio Realization" value={pct(real)} sub="vs 92% target" accent={real>=92?C.success:real>=80?C.warning:C.danger}/>
-        <KpiCard label="Active Projects" value={PROJECTS.filter(p=>p.status==="Active").length} sub={`Across ${dos.length} Delivery Owners`} accent={C.primary}/>
-        <KpiCard label="Open Exceptions" value={initTagReviews.filter(r=>r.status==="Overdue").length+INVOICES.filter(i=>i.status==="Overdue").length} sub="Tag reviews + overdue invoices" accent={C.danger}/>
-      </div>
-
-      <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:16,marginBottom:20}}>
-        {doReals.map(d=>{
-          const color=d.real>=92?C.success:d.real>=80?C.warning:C.danger;
-          const borderColor=d.real>=92?C.success:d.real>=80?C.warning:C.danger;
-          return(
-            <Card key={d.name} style={{borderLeft:`4px solid ${borderColor}`}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
-                <div>
-                  <div style={{fontWeight:700,fontSize:14}}>{d.name}</div>
-                  <div style={{fontSize:12,color:C.textSub}}>{d.projects} projects</div>
-                </div>
-                <Badge color={d.real>=92?"green":d.real>=80?"amber":"red"} dot>{pct(d.real)} real.</Badge>
-              </div>
-              <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:C.textSub,marginBottom:6}}>
-                <span>Forecast: <strong>{fmtM(d.fc)}</strong></span>
-                <span>Actual: <strong style={{color:C.text}}>{fmtM(d.ac)}</strong></span>
-              </div>
-              <MiniBar value={d.ac} max={d.fc} color={color}/>
-            </Card>
-          );
-        })}
-      </div>
-
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20}}>
-        <Card>
-          <div style={{fontWeight:700,marginBottom:12}}>Top Accounts by Realization</div>
-          <Table cols={[
-            {key:"name",label:"Customer"},
-            {key:"revenue",label:"Forecast",right:true,render:r=>fmtM(r.revenue)},
-            {key:"real",label:"Realization",right:true,render:r=>{const rl=r.actual/r.revenue*100||88;return<Badge color={rl>=92?"green":rl>=80?"amber":"red"}>{pct(rl)}</Badge>;}},
-          ]} rows={CUSTOMERS.slice(0,5).map(c=>({...c,actual:c.revenue*0.88}))}/>
-        </Card>
-        <Card>
-          <div style={{fontWeight:700,marginBottom:12}}>Unbilled Backlog</div>
-          {PROJECTS.filter(p=>p.forecast-p.actual>50000).slice(0,5).map((p,i)=>(
-            <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:`1px solid ${C.border}`}}>
-              <div>
-                <div style={{fontSize:13,fontWeight:600}}>{p.name}</div>
-                <div style={{fontSize:11,color:C.textSub}}>{p.deliveryOwner}</div>
-              </div>
-              <span style={{fontWeight:700,color:C.warning}}>{fmtM(toUSD(p.forecast-p.actual,"USD"))}</span>
-            </div>
-          ))}
-        </Card>
-      </div>
-    </div>
-  );
-}
-
-// ─── DIVISION HEAD DASHBOARD ───────────────────────────────────────────────
-function DHDashboard(){
-  const [divFilter,setDivFilter]=useState("Regulatory Affairs");
-  const divProjects=divFilter==="All"?PROJECTS:PROJECTS.filter(p=>p.division===divFilter);
-  const divFc=divProjects.reduce((s,p)=>s+toUSD(p.forecast,CONTRACTS.find(k=>k.id===p.contractId)?.currency||"USD"),0);
-  const divAc=divProjects.reduce((s,p)=>s+toUSD(p.actual,CONTRACTS.find(k=>k.id===p.contractId)?.currency||"USD"),0);
-  const real=divFc>0?divAc/divFc*100:0;
-
-  const deptBreakdown=DEPARTMENTS.map(dept=>{
-    const dp=divProjects.filter(p=>p.dept===dept);
-    const fc=dp.reduce((s,p)=>s+toUSD(p.forecast,CONTRACTS.find(k=>k.id===p.contractId)?.currency||"USD"),0);
-    const ac=dp.reduce((s,p)=>s+toUSD(p.actual,CONTRACTS.find(k=>k.id===p.contractId)?.currency||"USD"),0);
-    return{dept,fc,ac,real:fc>0?ac/fc*100:0,count:dp.length};
-  }).filter(d=>d.count>0);
-
-  return(
-    <div>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20}}>
-        <div>
-          <h2 style={{margin:0,fontSize:20,fontWeight:700,color:C.text}}>Division Head Dashboard</h2>
-          <p style={{margin:"4px 0 0",color:C.textSub,fontSize:13}}>Amir Patel · Cross-functional visibility enabled · April 2026</p>
-        </div>
-        <div style={{display:"flex",gap:8,alignItems:"center"}}>
-          <span style={{fontSize:12,color:C.textSub}}>Division:</span>
-          {["All",...DIVISIONS].map(d=>(
-            <button key={d} onClick={()=>setDivFilter(d)} style={{padding:"5px 12px",borderRadius:20,border:`1.5px solid ${divFilter===d?C.primary:C.border}`,
-              background:divFilter===d?C.primary:C.white,color:divFilter===d?C.white:C.textSub,fontSize:12,fontWeight:600,cursor:"pointer"}}>{d}</button>
-          ))}
-        </div>
-      </div>
-
-      <div style={{display:"flex",gap:16,marginBottom:24,flexWrap:"wrap"}}>
-        <KpiCard label="Division Forecast" value={fmtM(divFc)} sub={`${divFilter} · 2026`} accent={C.primary}/>
-        <KpiCard label="Actuals YTD" value={fmtM(divAc)} sub="Jan–Mar 2026" accent={C.success}/>
-        <KpiCard label="Realization" value={pct(real)} sub="vs 92% target" accent={real>=92?C.success:real>=80?C.warning:C.danger} badge={<Badge color={real>=92?"green":real>=80?"amber":"red"} dot>{pct(real)} vs 92% target</Badge>}/>
-        <KpiCard label="Active Projects" value={divProjects.filter(p=>p.status==="Active").length} sub={`${divProjects.length} total`} accent={C.primary}/>
-      </div>
-
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20,marginBottom:20}}>
-        <Card>
-          <div style={{fontWeight:700,marginBottom:12}}>By Department</div>
-          {deptBreakdown.map(d=>(
-            <div key={d.dept} style={{marginBottom:14}}>
-              <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4}}>
-                <span style={{fontWeight:600}}>{d.dept}</span>
-                <span style={{color:d.real>=92?C.success:d.real>=80?C.warning:C.danger,fontWeight:600}}>{pct(d.real)} · {fmtM(d.fc)}</span>
-              </div>
-              <MiniBar value={d.ac} max={d.fc||1} color={d.real>=92?C.success:d.real>=80?C.warning:C.danger}/>
-            </div>
-          ))}
-        </Card>
-        <Card>
-          <div style={{fontWeight:700,marginBottom:12}}>Variance Hotspots</div>
-          {divProjects.filter(p=>p.forecast>0).map(p=>{
-            const fc=toUSD(p.forecast,CONTRACTS.find(k=>k.id===p.contractId)?.currency||"USD");
-            const ac=toUSD(p.actual,CONTRACTS.find(k=>k.id===p.contractId)?.currency||"USD");
-            const rl=ac/fc*100;
-            return{...p,fc,ac,rl};
-          }).sort((a,b)=>a.rl-b.rl).slice(0,4).map((p,i)=>(
-            <div key={i} style={{padding:"8px 0",borderBottom:`1px solid ${C.border}`}}>
-              <div style={{display:"flex",justifyContent:"space-between"}}>
-                <span style={{fontSize:13,fontWeight:600}}>{p.name}</span>
-                <Badge color={p.rl>=92?"green":p.rl>=80?"amber":"red"}>{pct(p.rl)}</Badge>
-              </div>
-              <div style={{fontSize:11,color:C.textSub}}>{p.deliveryOwner} · {p.dept}</div>
-              <div style={{fontSize:11,color:C.danger}}>Gap: {fmtM(p.fc-p.ac)}</div>
-            </div>
-          ))}
-        </Card>
-      </div>
-
-      <Card>
-        <div style={{fontWeight:700,marginBottom:12}}>Projects in Division</div>
-        <Table cols={[
-          {key:"name",label:"Project"},
-          {key:"customer",label:"Customer"},
-          {key:"deliveryOwner",label:"Delivery Owner"},
-          {key:"status",label:"Status",render:r=><Badge color={r.status==="Active"?"green":r.status==="On Hold"?"amber":"gray"} dot>{r.status}</Badge>},
-          {key:"forecast",label:"Forecast (USD)",right:true,render:r=>fmtM(toUSD(r.forecast,CONTRACTS.find(k=>k.id===r.contractId)?.currency||"USD"))},
-          {key:"real",label:"Real.",right:true,render:r=>{const rl=r.actual/r.forecast*100;return<Badge color={rl>=92?"green":rl>=80?"amber":"red"}>{pct(rl)}</Badge>;}},
-        ]} rows={divProjects}/>
-      </Card>
-    </div>
-  );
-}
-
-// ─── ADMIN DASHBOARD ───────────────────────────────────────────────────────
-function AdminDashboard(){
-  const totalFc=totalForecastUSD(),totalAc=totalActualUSD(),real=getRealization();
-  const failedSync=INVOICES.filter(i=>i.odooSync==="Failed");
-  const activeUsers=USERS.filter(u=>u.status==="Active").length;
-  const pendingUsers=USERS.filter(u=>u.status==="Pending").length;
-  const missingTags=3,overdueReviews=initTagReviews.filter(r=>r.status==="Overdue").length;
-
-  return(
-    <div>
-      <SectionHeader title="Admin Dashboard" sub="Full platform visibility · Sarah Chen · April 2026"/>
-      <div style={{display:"flex",gap:16,marginBottom:24,flexWrap:"wrap"}}>
-        <KpiCard label="Total Forecast 2026" value={fmtM(totalFc)} sub="All divisions · USD" accent={C.primary}/>
-        <KpiCard label="Actuals YTD" value={fmtM(totalAc)} sub="Jan–Mar 2026" accent={C.success}/>
-        <KpiCard label="Realization" value={pct(real)} sub="Company-wide" accent={real>=92?C.success:real>=80?C.warning:C.danger}/>
-        <KpiCard label="Active Users" value={`${activeUsers}/${USERS.length}`} sub={`${pendingUsers} pending activation`} accent={C.primary}/>
-        <KpiCard label="Platform Issues" value={overdueReviews+failedSync.length+missingTags} sub="Reviews + sync + data quality" accent={C.danger}/>
-      </div>
-
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:20,marginBottom:20}}>
-        <Card>
-          <div style={{fontWeight:700,marginBottom:12}}>Data Integrity</div>
-          {[
-            {label:"Missing mandatory tags",count:missingTags,color:"red"},
-            {label:"Overdue tag reviews",count:overdueReviews,color:"red"},
-            {label:"Active SLs with no forecast",count:2,color:"amber"},
-            {label:"Projects without service lines",count:1,color:"amber"},
-            {label:"Contracts expiring <30 days",count:2,color:"amber"},
-            {label:"Pending rate alerts",count:initAlerts.filter(a=>a.status==="Pending").length,color:"blue"},
-          ].map((item,i)=>(
-            <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderBottom:`1px solid ${C.border}`}}>
-              <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                <span style={{width:8,height:8,borderRadius:"50%",background:C[item.color]}}/>
-                <span style={{fontSize:12,color:C.text}}>{item.label}</span>
-              </div>
-              <Badge color={item.color}>{item.count}</Badge>
-            </div>
-          ))}
-        </Card>
-        <Card>
-          <div style={{fontWeight:700,marginBottom:12}}>Platform Health</div>
-          {[
-            {service:"Odoo API",status:failedSync.length>0?"Warning":"OK",detail:failedSync.length>0?`${failedSync.length} failed syncs`:"All synced"},
-            {service:"FX Rates (Apr 2026)",status:"Warning",detail:"7 pairs missing"},
-            {service:"Database",status:"OK",detail:"Healthy"},
-            {service:"Background Jobs",status:"OK",detail:"Running"},
-            {service:"SSO / Auth",status:"OK",detail:"Connected"},
-            {service:"Scheduled Reports",status:"OK",detail:"2 scheduled"},
-          ].map((item,i)=>(
-            <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderBottom:`1px solid ${C.border}`}}>
-              <span style={{fontSize:12,color:C.text}}>{item.service}</span>
-              <div style={{textAlign:"right"}}>
-                <Badge color={item.status==="OK"?"green":item.status==="Warning"?"amber":"red"} dot>{item.status}</Badge>
-                <div style={{fontSize:10,color:C.textMuted,marginTop:2}}>{item.detail}</div>
-              </div>
-            </div>
-          ))}
-        </Card>
-        <Card>
-          <div style={{fontWeight:700,marginBottom:12}}>Odoo Sync Log</div>
-          {failedSync.map((inv,i)=>(
-            <div key={i} style={{padding:"8px 0",borderBottom:`1px solid ${C.border}`}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <span style={{fontSize:12,fontWeight:600,color:C.danger}}>✕ {inv.number}</span>
-                <Btn size="sm">Retry</Btn>
-              </div>
-              <div style={{fontSize:11,color:C.textMuted}}>Connection timeout — attempt 3/3</div>
-            </div>
-          ))}
-          <div style={{marginTop:12,fontSize:12,color:C.textSub}}>✓ {INVOICES.filter(i=>i.odooSync==="Synced").length} invoices synced successfully</div>
-        </Card>
-      </div>
-
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20}}>
-        <Card>
-          <div style={{fontWeight:700,marginBottom:12}}>Revenue by Division (USD)</div>
-          {DIVISIONS.map((div,i)=>{
-            const dp=PROJECTS.filter(p=>p.division===div);
-            const fc=dp.reduce((s,p)=>s+toUSD(p.forecast,"USD"),0);
-            const ac=dp.reduce((s,p)=>s+toUSD(p.actual,"USD"),0);
-            const colors=[C.primary,C.success,C.warning,C.purple];
-            return(
-              <div key={div} style={{marginBottom:14}}>
-                <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4}}>
-                  <span style={{fontWeight:600}}>{div}</span>
-                  <span style={{color:C.textSub}}>{fmtM(fc)} · {pct(fc>0?ac/fc*100:0)}</span>
-                </div>
-                <MiniBar value={fc} max={totalFc||1} color={colors[i%4]}/>
-              </div>
-            );
-          })}
-        </Card>
-        <Card>
-          <div style={{fontWeight:700,marginBottom:12}}>Concentration Risk</div>
-          <Alert type="warning">Top 3 customers represent {pct(([2850000,1920000,1340000].reduce((a,b)=>a+b,0)/CUSTOMERS.reduce((s,c)=>s+c.revenue,0))*100)} of total forecast</Alert>
-          <Table cols={[
-            {key:"name",label:"Customer"},
-            {key:"revenue",label:"Forecast",right:true,render:r=>fmtM(r.revenue)},
-            {key:"pct",label:"% of Total",right:true,render:r=><Badge color={r.revenue/CUSTOMERS.reduce((s,c)=>s+c.revenue,0)>0.15?"amber":"gray"}>{pct(r.revenue/CUSTOMERS.reduce((s,c)=>s+c.revenue,0)*100)}</Badge>},
-          ]} rows={CUSTOMERS.slice(0,5)}/>
-        </Card>
-      </div>
-    </div>
-  );
-}
-
-// ─── LEADERSHIP DASHBOARD ──────────────────────────────────────────────────
-function LeadershipDashboard(){
-  const fc=totalForecastUSD(),ac=totalActualUSD(),real=getRealization();
-  const invTotal=invoiceTotalUSD(),invPaid=invoicePaidUSD();
-  const insights=[
-    {icon:"📉",headline:`Realization at ${pct(real)}`,detail:`Below the 92% company target by ${pct(92-real)}. AstraZeneca and GSK are the primary drag.`,severity:"warning"},
-    {icon:"⚠",headline:"Concentration risk flagged",detail:`Johnson & Johnson + AstraZeneca + GSK represent ${pct(([2850000,1920000,1340000].reduce((a,b)=>a+b,0)/CUSTOMERS.reduce((s,c)=>s+c.revenue,0))*100)} of total forecast.`,severity:"warning"},
-    {icon:"📈",headline:`8.3% growth vs prior year`,detail:"Driven by expansion in Regulatory Affairs and new Roche engagement in Q1.",severity:"info"},
-  ];
-
-  return(
-    <div style={{maxWidth:1100}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
-        <div>
-          <h2 style={{margin:0,fontSize:20,fontWeight:700,color:C.text}}>Leadership Dashboard</h2>
-          <p style={{margin:"4px 0 0",color:C.textSub,fontSize:13}}>Board & Executive View · Read-only · April 2026</p>
-        </div>
-        <Badge color="gray">Read only</Badge>
-      </div>
-
-      {/* AI Insight Banner */}
-      <Card style={{marginBottom:20,background:"linear-gradient(135deg,#0C1F3D,#1a3a6b)",border:"none"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-          <span style={{color:"rgba(255,255,255,0.6)",fontSize:11,fontWeight:600,textTransform:"uppercase",letterSpacing:1}}>✦ AI Insights — Generated Apr 9, 2026</span>
-          <span style={{color:"rgba(255,255,255,0.4)",fontSize:11,cursor:"pointer"}}>View previous insights →</span>
-        </div>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:16}}>
-          {insights.map((ins,i)=>(
-            <div key={i} style={{background:"rgba(255,255,255,0.07)",borderRadius:8,padding:14}}>
-              <div style={{fontSize:20,marginBottom:6}}>{ins.icon}</div>
-              <div style={{color:C.white,fontWeight:700,fontSize:13,marginBottom:4}}>{ins.headline}</div>
-              <div style={{color:"rgba(255,255,255,0.6)",fontSize:12,lineHeight:1.5}}>{ins.detail}</div>
-            </div>
-          ))}
-        </div>
-      </Card>
-
-      <div style={{display:"flex",gap:16,marginBottom:24,flexWrap:"wrap"}}>
-        <KpiCard label="Total Forecast 2026" value={fmtM(fc)} sub="All divisions · USD" accent={C.primary} delta={8.3}/>
-        <KpiCard label="Actuals YTD" value={fmtM(ac)} sub="Jan–Mar 2026" accent={C.success}/>
-        <KpiCard label="Billing Realization" value={pct(real)} sub="vs 92% target" accent={real>=92?C.success:real>=80?C.warning:C.danger}/>
-        <KpiCard label="Invoiced YTD" value={fmtM(invTotal)} sub={`${fmtM(invPaid)} collected`} accent={C.success}/>
-        <KpiCard label="Active Customers" value={CUSTOMERS.filter(c=>c.status==="Active").length} sub={`${CUSTOMERS.filter(c=>c.strategic).length} strategic`} accent={C.primary}/>
-      </div>
-
-      <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:20,marginBottom:20}}>
-        <Card>
-          <div style={{fontWeight:700,marginBottom:4}}>Revenue Trend 2026</div>
-          <div style={{fontSize:12,color:C.textSub,marginBottom:12}}>Monthly forecast vs actuals · USD</div>
-          <MiniTrendChart data={TREND_DATA} height={130} showLabels/>
-        </Card>
-        <Card>
-          <div style={{fontWeight:700,marginBottom:12}}>Risk & Attention</div>
-          {[
-            {label:`Realization ${pct(real)} vs 92% target`,severity:"danger"},
-            {label:"1 Odoo sync failure pending",severity:"danger"},
-            {label:"2 contracts expiring within 30 days",severity:"warning"},
-            {label:`${initTagReviews.filter(r=>r.status==="Overdue").length} overdue tag reviews`,severity:"warning"},
-            {label:"8.3% YoY revenue growth ✓",severity:"success"},
-          ].map((item,i)=>(
-            <div key={i} style={{display:"flex",gap:8,alignItems:"center",padding:"7px 0",borderBottom:`1px solid ${C.border}`}}>
-              <span style={{width:8,height:8,borderRadius:"50%",background:C[item.severity],flexShrink:0}}/>
-              <span style={{fontSize:13,color:C.text}}>{item.label}</span>
-            </div>
-          ))}
-        </Card>
-      </div>
-
-      <Card>
-        <div style={{fontWeight:700,marginBottom:12}}>Top 5 Customers</div>
-        <Table cols={[
-          {key:"name",label:"Customer"},
-          {key:"type",label:"Type"},
-          {key:"revenue",label:"Forecast",right:true,render:r=><strong>{fmtM(r.revenue)}</strong>},
-          {key:"actual",label:"Actuals YTD",right:true,render:r=>fmtM(r.revenue*0.88)},
-          {key:"real",label:"Realization",right:true,render:r=>{const rl=88;return<Badge color={rl>=92?"green":rl>=80?"amber":"red"}>{pct(rl)}</Badge>;}},
-          {key:"strategic",label:"",render:r=>r.strategic?<Badge color="purple">Strategic</Badge>:null},
-        ]} rows={CUSTOMERS.slice(0,5)}/>
-      </Card>
-    </div>
-  );
-}
-
-// ─── EXCEPTION REPORTS ─────────────────────────────────────────────────────
-function ExceptionReports(){
-  const [tab,setTab]=useState("billing");
-  const overdueInvoices=INVOICES.filter(i=>i.status==="Overdue");
-  const failedSync=INVOICES.filter(i=>i.odooSync==="Failed");
-  const overdueReviews=initTagReviews.filter(r=>r.status==="Overdue");
-  const expiring=CONTRACTS.filter(c=>c.status==="Active"&&c.ref==="SOW-PFZ-2025");
-
-  return(
-    <div>
-      <SectionHeader title="Exception Reports" sub="Platform-wide exceptions requiring attention"/>
-      <Tabs tabs={[
-        {key:"billing",label:"Billing Exceptions",count:overdueInvoices.length},
-        {key:"dataquality",label:"Data Quality",count:3},
-        {key:"contracts",label:"Contracts & Expiry",count:2},
-        {key:"tagreviews",label:"Tag Reviews",count:overdueReviews.length},
-        {key:"odoo",label:"Odoo Sync",count:failedSync.length},
-      ]} active={tab} onChange={setTab}/>
-
-      {tab==="billing"&&(
-        <div>
-          <div style={{display:"flex",gap:16,marginBottom:20,flexWrap:"wrap"}}>
-            <KpiCard label="Overdue Invoices" value={overdueInvoices.length} sub="Past due date" accent={C.danger}/>
-            <KpiCard label="Overdue Value" value={fmtM(overdueInvoices.reduce((s,i)=>s+toUSD(i.amount,i.currency),0))} sub="USD equivalent" accent={C.danger}/>
-            <KpiCard label="Outstanding Total" value={fmtM(invoiceOutstandingUSD())} sub="Not yet due" accent={C.warning}/>
-            <KpiCard label="Below 80% Realization" value={CUSTOMERS.filter(c=>c.revenue<500000).length} sub="Customers at risk" accent={C.warning}/>
-          </div>
-          <Card>
-            <div style={{fontWeight:700,marginBottom:12}}>Overdue Invoices</div>
-            <Table cols={[
-              {key:"number",label:"Invoice"},
-              {key:"customer",label:"Customer"},
-              {key:"amount",label:"Amount",right:true,render:r=><strong>{r.currency} {fmtN(r.amount)}</strong>},
-              {key:"due",label:"Due Date",render:r=><span style={{color:C.danger,fontWeight:600}}>{r.due}</span>},
-              {key:"status",label:"Status",render:r=><Badge color="red" dot>{r.status}</Badge>},
-              {key:"odooSync",label:"Odoo",render:r=><Badge color={r.odooSync==="Synced"?"green":"red"}>{r.odooSync}</Badge>},
-              {key:"actions",label:"",render:r=><div style={{display:"flex",gap:4}}><Btn size="sm">Chase</Btn><Btn size="sm" variant="ghost">View</Btn></div>},
-            ]} rows={overdueInvoices}/>
-          </Card>
-        </div>
-      )}
-
-      {tab==="dataquality"&&(
-        <Card>
-          <Alert type="warning">3 data quality issues require attention before month-end reporting.</Alert>
-          <Table cols={[
-            {key:"type",label:"Issue Type",render:r=><Badge color={r.severity==="Critical"?"red":"amber"}>{r.severity}</Badge>},
-            {key:"description",label:"Description"},
-            {key:"entity",label:"Entity"},
-            {key:"owner",label:"Owner"},
-            {key:"actions",label:"",render:r=><Btn size="sm">Fix →</Btn>},
-          ]} rows={[
-            {type:"Missing Tags",severity:"Critical",description:"Mandatory Division tag missing",entity:"Pfizer Labelling Hub / SL-009",owner:"Tom Raj"},
-            {type:"No Forecast",severity:"Critical",description:"Active service line with no forecast entries",entity:"Roche Submission Support",owner:"Mike Kumar"},
-            {type:"No Service Lines",severity:"Warning",description:"Project has no service lines",entity:"Abbott MedTech Review",owner:"Tom Raj"},
-          ]}/>
-        </Card>
-      )}
-
-      {tab==="contracts"&&(
-        <Card>
-          <Alert type="warning">2 contracts expiring within 30 days with open service lines and unbilled forecast.</Alert>
-          <Table cols={[
-            {key:"ref",label:"Contract"},
-            {key:"customer",label:"Customer"},
-            {key:"end",label:"Expiry Date",render:r=><span style={{color:C.danger,fontWeight:600}}>{r.end}</span>},
-            {key:"value",label:"Value",right:true,render:r=><strong>{r.currency} {fmtN(r.value)}</strong>},
-            {key:"status",label:"Status",render:r=><Badge color={r.status==="Expired"?"red":"amber"} dot>{r.status}</Badge>},
-            {key:"actions",label:"",render:r=><Btn size="sm">Renew</Btn>},
-          ]} rows={CONTRACTS.filter(c=>["SOW-PFZ-2025","MSA-GSK-2023"].includes(c.ref))}/>
-        </Card>
-      )}
-
-      {tab==="tagreviews"&&(
-        <Card>
-          <Alert type="danger">{overdueReviews.length} tag reviews are overdue. Delivery Owners must complete these before month-end.</Alert>
-          <Table cols={[
-            {key:"project",label:"Project"},
-            {key:"deliveryOwner",label:"Delivery Owner"},
-            {key:"trigger",label:"Trigger",render:r=><Badge color={r.trigger==="Status Change"?"amber":"blue"}>{r.trigger}</Badge>},
-            {key:"dueDate",label:"Due Date"},
-            {key:"daysOverdue",label:"Days Overdue",right:true,render:r=>r.daysOverdue>0?<span style={{color:C.danger,fontWeight:700}}>{r.daysOverdue}d</span>:<span style={{color:C.textMuted}}>—</span>},
-            {key:"status",label:"Status",render:r=><Badge color={r.status==="Overdue"?"red":"amber"} dot>{r.status}</Badge>},
-            {key:"actions",label:"",render:r=><Btn size="sm" variant="ghost">Nudge</Btn>},
-          ]} rows={initTagReviews}/>
-        </Card>
-      )}
-
-      {tab==="odoo"&&(
-        <Card>
-          {failedSync.length>0&&<Alert type="danger">{failedSync.length} invoice sync failure. Retry automatically attempted 3 times — manual intervention required.</Alert>}
-          <div style={{display:"flex",gap:8,marginBottom:16}}><Btn size="sm">Retry All Failed</Btn></div>
-          <Table cols={[
-            {key:"number",label:"Invoice"},
-            {key:"customer",label:"Customer"},
-            {key:"amount",label:"Amount",right:true,render:r=>`${r.currency} ${fmtN(r.amount)}`},
-            {key:"odooSync",label:"Sync Status",render:r=><Badge color={r.odooSync==="Synced"?"green":"red"} dot>{r.odooSync}</Badge>},
-            {key:"error",label:"Error",render:r=>r.odooSync==="Failed"?<span style={{fontSize:11,color:C.danger}}>Connection timeout — 3 attempts</span>:<span style={{fontSize:11,color:C.success}}>Synced successfully</span>},
-            {key:"actions",label:"",render:r=>r.odooSync==="Failed"?<Btn size="sm">Retry</Btn>:null},
-          ]} rows={INVOICES}/>
-        </Card>
-      )}
-    </div>
-  );
-}
-
-// ─── TAG REVIEWS MODULE ────────────────────────────────────────────────────
-function TagReviews(){
-  const [reviews,setReviews]=useState(initTagReviews);
-  const [activeReview,setActiveReview]=useState(null);
-  const [reviewForm,setReviewForm]=useState({});
-  const [filterStatus,setFilterStatus]=useState("All");
-
-  const filtered=reviews.filter(r=>filterStatus==="All"?true:r.status===filterStatus);
-
-  const openReview=(r)=>{setActiveReview(r);setReviewForm({...r.tags});};
-  const completeReview=()=>{
-    setReviews(prev=>prev.map(r=>r.id===activeReview.id?{...r,status:"Completed",tags:{...reviewForm}}:r));
-    setActiveReview(null);
+  const saveEdit=()=>{
+    if(!editVal.trim())return;
+    setTags(p=>({...p,[activeCategory]:p[activeCategory].map(t=>t===editingTag?editVal.trim():t)}));
+    setEditingTag(null);setEditVal("");
   };
 
   return(
     <div>
-      <SectionHeader title="Tag Review Workflow" sub="Periodic tag accuracy reviews for all active projects"
-        action={<Btn size="sm">+ Manual Review</Btn>}/>
+      <SectionHeader title="Tag Master" sub="Single source of truth for all classification tags across the platform"
+        action={<div style={{display:"flex",gap:8}}>
+          <Btn variant="secondary" size="sm" onClick={()=>setShowNewCat(true)}>+ New Category</Btn>
+          <Btn size="sm" onClick={()=>setShowNewTag(true)}>+ New Tag</Btn>
+        </div>}/>
 
-      <div style={{display:"flex",gap:16,marginBottom:24,flexWrap:"wrap"}}>
-        <KpiCard label="Overdue" value={reviews.filter(r=>r.status==="Overdue").length} sub="Past due date" accent={C.danger}/>
-        <KpiCard label="Pending" value={reviews.filter(r=>r.status==="Pending").length} sub="Due soon" accent={C.warning}/>
-        <KpiCard label="Completed (Apr)" value={reviews.filter(r=>r.status==="Completed").length} sub="This month" accent={C.success}/>
-        <KpiCard label="Next Scheduled" value="May 1" sub="Monthly cycle" accent={C.primary}/>
-      </div>
+      <Alert type="info">All dropdowns across Customers, Contracts, Projects, Service Lines, and Employees pull live from these tags. Changes here reflect immediately everywhere.</Alert>
 
-      <Card>
-        <div style={{display:"flex",gap:8,marginBottom:16}}>
-          {["All","Overdue","Pending","Completed"].map(s=>(
-            <button key={s} onClick={()=>setFilterStatus(s)} style={{padding:"5px 14px",borderRadius:20,border:`1.5px solid ${filterStatus===s?C.primary:C.border}`,
-              background:filterStatus===s?C.primary:C.white,color:filterStatus===s?C.white:C.textSub,fontSize:12,fontWeight:600,cursor:"pointer"}}>{s}</button>
-          ))}
-        </div>
-        <Table cols={[
-          {key:"project",label:"Project"},
-          {key:"customer",label:"Customer"},
-          {key:"deliveryOwner",label:"Delivery Owner"},
-          {key:"trigger",label:"Trigger",render:r=><Badge color={r.trigger==="Status Change"?"amber":r.trigger==="Manual"?"purple":"blue"}>{r.trigger}</Badge>},
-          {key:"triggerDetail",label:"Detail",render:r=><span style={{fontSize:11,color:C.textSub}}>{r.triggerDetail}</span>},
-          {key:"dueDate",label:"Due"},
-          {key:"daysOverdue",label:"Overdue",right:true,render:r=>r.daysOverdue>0?<span style={{color:C.danger,fontWeight:700}}>{r.daysOverdue}d</span>:<span style={{color:C.textMuted}}>—</span>},
-          {key:"status",label:"Status",render:r=><Badge color={r.status==="Overdue"?"red":r.status==="Pending"?"amber":r.status==="Completed"?"green":"gray"} dot>{r.status}</Badge>},
-          {key:"actions",label:"",render:r=>r.status!=="Completed"?<Btn size="sm" onClick={()=>openReview(r)}>Review</Btn>:<span style={{fontSize:12,color:C.success}}>✓ Done</span>},
-        ]} rows={filtered}/>
-      </Card>
-
-      <Modal open={!!activeReview} onClose={()=>setActiveReview(null)} title={`Tag Review — ${activeReview?.project}`} width={700}>
-        {activeReview&&(
-          <>
-            <Alert type="warning">Tag reviews are non-delegable. You are reviewing as the assigned Delivery Owner.</Alert>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20,marginBottom:20}}>
-              <div>
-                <div style={{fontWeight:700,fontSize:13,marginBottom:12,color:C.textSub}}>Current Tags</div>
-                {Object.entries(activeReview.tags).map(([k,v])=>(
-                  <div key={k} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:`1px solid ${C.border}`}}>
-                    <span style={{fontSize:12,color:C.textSub,textTransform:"capitalize"}}>{k}</span>
-                    <Badge color="blue">{v}</Badge>
-                  </div>
-                ))}
-              </div>
-              <div>
-                <div style={{fontWeight:700,fontSize:13,marginBottom:12,color:C.textSub}}>Update Tags</div>
-                <div style={{display:"flex",flexDirection:"column",gap:12}}>
-                  <Select label="Division" value={reviewForm.division||""} onChange={v=>setReviewForm(p=>({...p,division:v}))} options={DIVISIONS.map(d=>({value:d,label:d}))}/>
-                  <Select label="Department" value={reviewForm.dept||""} onChange={v=>setReviewForm(p=>({...p,dept:v}))} options={DEPARTMENTS.map(d=>({value:d,label:d}))}/>
-                  <Select label="Country" value={reviewForm.country||""} onChange={v=>setReviewForm(p=>({...p,country:v}))} options={TAGS.country.map(d=>({value:d,label:d}))}/>
-                  <Select label="Region" value={reviewForm.region||""} onChange={v=>setReviewForm(p=>({...p,region:v}))} options={TAGS.region.map(d=>({value:d,label:d}))}/>
-                </div>
-              </div>
-            </div>
-            <Input label="Review Notes (optional)" value={reviewForm.notes||""} onChange={v=>setReviewForm(p=>({...p,notes:v}))} placeholder="Any changes or observations..."/>
-            <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:20}}>
-              <Btn variant="ghost" onClick={()=>setActiveReview(null)}>Cancel</Btn>
-              <Btn variant="success" onClick={completeReview}>Mark Complete</Btn>
-            </div>
-          </>
-        )}
-      </Modal>
-    </div>
-  );
-}
-
-// ─── USER MANAGEMENT ───────────────────────────────────────────────────────
-function UserManagement(){
-  const [users,setUsers]=useState(USERS);
-  const [selected,setSelected]=useState(null);
-  const [showInvite,setShowInvite]=useState(false);
-  const [inviteForm,setInviteForm]=useState({name:"",email:"",role:"Delivery Owner",division:""});
-  const [filterRole,setFilterRole]=useState("All");
-
-  const roles=["All","Delivery Owner","Portfolio Head","Division Head","Admin","Leadership"];
-  const filtered=users.filter(u=>filterRole==="All"?true:u.role===filterRole);
-
-  const handleInvite=()=>{
-    if(!inviteForm.name||!inviteForm.email)return;
-    setUsers(prev=>[...prev,{id:"u"+Date.now(),...inviteForm,status:"Pending",lastLogin:"—",scope:[]}]);
-    setShowInvite(false);
-    setInviteForm({name:"",email:"",role:"Delivery Owner",division:""});
-  };
-
-  return(
-    <div>
-      <SectionHeader title="User Management" sub="Platform users, roles, and data scope"
-        action={<div style={{display:"flex",gap:8}}><Btn size="sm" onClick={()=>setShowInvite(true)}>+ Invite User</Btn></div>}/>
-
-      <div style={{display:"flex",gap:16,marginBottom:24,flexWrap:"wrap"}}>
-        <KpiCard label="Total Users" value={users.length} sub="Registered accounts" accent={C.primary}/>
-        <KpiCard label="Active" value={users.filter(u=>u.status==="Active").length} sub="Logged in at least once" accent={C.success}/>
-        <KpiCard label="Pending Activation" value={users.filter(u=>u.status==="Pending").length} sub="Invited, not yet logged in" accent={C.warning}/>
-        <KpiCard label="Delivery Owners" value={users.filter(u=>u.role==="Delivery Owner").length} sub="Active DOs" accent={C.primary}/>
-      </div>
-
-      <div style={{display:"grid",gridTemplateColumns:"1fr 340px",gap:20}}>
+      <div style={{display:"grid",gridTemplateColumns:"260px 1fr",gap:20}}>
+        {/* Category list */}
         <Card style={{padding:0}}>
-          <div style={{padding:"14px 20px",display:"flex",gap:8,alignItems:"center",borderBottom:`1px solid ${C.border}`,flexWrap:"wrap"}}>
-            {roles.map(r=>(
-              <button key={r} onClick={()=>setFilterRole(r)} style={{padding:"4px 12px",borderRadius:20,border:`1.5px solid ${filterRole===r?C.primary:C.border}`,
-                background:filterRole===r?C.primary:C.white,color:filterRole===r?C.white:C.textSub,fontSize:12,fontWeight:600,cursor:"pointer"}}>{r}</button>
+          <div style={{padding:"12px 16px",borderBottom:`1px solid ${C.border}`,fontWeight:700,fontSize:12,color:C.textSub,textTransform:"uppercase",letterSpacing:0.5}}>
+            Categories ({Object.keys(tags).length})
+          </div>
+          {Object.keys(tags).map(cat=>(
+            <div key={cat} onClick={()=>{setActiveCategory(cat);setSearch("");}} style={{padding:"10px 16px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",
+              background:activeCategory===cat?C.primaryLight:"transparent",borderLeft:activeCategory===cat?`3px solid ${C.primary}`:"3px solid transparent",
+              fontSize:13,fontWeight:activeCategory===cat?700:400,color:activeCategory===cat?C.primary:C.text}}>
+              <span>{cat}</span>
+              <span style={{background:C.bg,borderRadius:10,padding:"1px 8px",fontSize:11,color:C.textSub,fontWeight:600}}>{(tags[cat]||[]).length}</span>
+            </div>
+          ))}
+        </Card>
+
+        {/* Tag list */}
+        <Card>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+            <div style={{fontWeight:700,fontSize:15}}>{activeCategory} <span style={{fontWeight:400,color:C.textMuted,fontSize:13}}>({filtered.length} tags)</span></div>
+            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search tags..." style={{border:`1.5px solid ${C.border}`,borderRadius:6,padding:"6px 10px",fontSize:12,outline:"none",width:200}}/>
+          </div>
+
+          {filtered.length===0&&<div style={{textAlign:"center",padding:"40px 0",color:C.textMuted,fontSize:13}}>No tags found. Click "+ New Tag" to add one.</div>}
+
+          <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+            {filtered.map(tag=>(
+              <div key={tag} style={{display:"flex",alignItems:"center",gap:0,background:C.primaryLight,borderRadius:20,overflow:"hidden",border:`1px solid ${C.primaryMid}`}}>
+                {editingTag===tag?(
+                  <>
+                    <input value={editVal} onChange={e=>setEditVal(e.target.value)} autoFocus
+                      style={{border:"none",background:"transparent",padding:"5px 10px",fontSize:12,fontWeight:600,color:C.primary,outline:"none",width:180}}
+                      onKeyDown={e=>{if(e.key==="Enter")saveEdit();if(e.key==="Escape"){setEditingTag(null);setEditVal("");}}}/>
+                    <button onClick={saveEdit} style={{background:C.primary,border:"none",color:C.white,padding:"5px 8px",cursor:"pointer",fontSize:11}}>✓</button>
+                    <button onClick={()=>{setEditingTag(null);setEditVal("");}} style={{background:"transparent",border:"none",color:C.textSub,padding:"5px 8px",cursor:"pointer",fontSize:11}}>✕</button>
+                  </>
+                ):(
+                  <>
+                    <span style={{padding:"5px 12px",fontSize:12,fontWeight:600,color:C.primary}}>{tag}</span>
+                    <button onClick={()=>{setEditingTag(tag);setEditVal(tag);}} style={{background:"transparent",border:"none",cursor:"pointer",color:C.textSub,padding:"5px 4px",fontSize:11}} title="Edit">✏</button>
+                    <button onClick={()=>removeTag(activeCategory,tag)} style={{background:"transparent",border:"none",cursor:"pointer",color:C.danger,padding:"5px 8px",fontSize:13}} title="Remove">×</button>
+                  </>
+                )}
+              </div>
             ))}
           </div>
-          <Table cols={[
-            {key:"name",label:"Name",render:r=><div><div style={{fontWeight:600}}>{r.name}</div><div style={{fontSize:11,color:C.textMuted}}>{r.email}</div></div>},
-            {key:"role",label:"Role",render:r=><Badge color={r.role==="Admin"?"red":r.role==="Leadership"?"purple":r.role==="Division Head"?"amber":"blue"}>{r.role}</Badge>},
-            {key:"division",label:"Division"},
-            {key:"status",label:"Status",render:r=><Badge color={r.status==="Active"?"green":"amber"} dot>{r.status}</Badge>},
-            {key:"lastLogin",label:"Last Login",render:r=><span style={{fontSize:12,color:C.textMuted}}>{r.lastLogin}</span>},
-          ]} rows={filtered} onRow={r=>setSelected(r)}/>
         </Card>
-
-        {selected?(
-          <Card>
-            <div style={{fontWeight:700,fontSize:15,marginBottom:4}}>{selected.name}</div>
-            <div style={{fontSize:12,color:C.textMuted,marginBottom:16}}>{selected.email}</div>
-            <div style={{display:"flex",flexDirection:"column",gap:12}}>
-              <Select label="Role" value={selected.role} onChange={v=>setSelected(p=>({...p,role:v}))} options={["Delivery Owner","Portfolio Head","Division Head","Admin","Leadership"].map(r=>({value:r,label:r}))}/>
-              <Select label="Division" value={selected.division} onChange={v=>setSelected(p=>({...p,division:v}))} options={["All",...DIVISIONS].map(d=>({value:d,label:d}))}/>
-              <div>
-                <div style={{fontSize:12,fontWeight:600,color:C.textSub,marginBottom:6}}>Data Scope</div>
-                <div style={{background:C.bg,borderRadius:6,padding:10}}>
-                  {selected.scope.map((s,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 0"}}>
-                    <span style={{fontSize:12}}>{s}</span>
-                    <button style={{background:"none",border:"none",cursor:"pointer",color:C.danger,fontSize:12}}>✕</button>
-                  </div>)}
-                  {selected.scope.length===0&&<span style={{fontSize:12,color:C.textMuted}}>No scope rules defined</span>}
-                </div>
-                <Btn size="sm" variant="secondary" style={{marginTop:8,width:"100%"}}>+ Add Scope Rule</Btn>
-              </div>
-              <Select label="Status" value={selected.status} onChange={v=>setSelected(p=>({...p,status:v}))} options={["Active","Suspended"].map(s=>({value:s,label:s}))}/>
-            </div>
-            <div style={{display:"flex",gap:8,marginTop:20}}>
-              <Btn onClick={()=>{setUsers(prev=>prev.map(u=>u.id===selected.id?{...selected}:u));}} style={{flex:1}}>Save Changes</Btn>
-              <Btn variant="ghost" onClick={()=>setSelected(null)}>Cancel</Btn>
-            </div>
-          </Card>
-        ):(
-          <Card style={{display:"flex",alignItems:"center",justifyContent:"center",color:C.textMuted,textAlign:"center"}}>
-            <div><div style={{fontSize:32,marginBottom:8}}>👤</div><div style={{fontSize:13}}>Select a user to view and edit their profile, role, and data scope</div></div>
-          </Card>
-        )}
       </div>
 
-      <Modal open={showInvite} onClose={()=>setShowInvite(false)} title="Invite New User" width={480}>
-        <div style={{display:"flex",flexDirection:"column",gap:16}}>
-          <Input label="Full Name" required value={inviteForm.name} onChange={v=>setInviteForm(p=>({...p,name:v}))} placeholder="e.g. Alex Johnson"/>
-          <Input label="Work Email" required type="email" value={inviteForm.email} onChange={v=>setInviteForm(p=>({...p,email:v}))} placeholder="alex.johnson@freyr.com"/>
-          <Select label="Role" required value={inviteForm.role} onChange={v=>setInviteForm(p=>({...p,role:v}))} options={["Delivery Owner","Portfolio Head","Division Head","Admin","Leadership"].map(r=>({value:r,label:r}))}/>
-          <Select label="Division" value={inviteForm.division} onChange={v=>setInviteForm(p=>({...p,division:v}))} placeholder="Select division" options={DIVISIONS.map(d=>({value:d,label:d}))}/>
+      {/* New Category Modal */}
+      <Modal open={showNewCat} onClose={()=>{setShowNewCat(false);setNewCatName("");}} title="New Tag Category" width={440}>
+        <Alert type="warning">Adding a new category creates a new dropdown that can be used across the platform. Choose the name carefully.</Alert>
+        <Input label="Category Name" required value={newCatName} onChange={setNewCatName} placeholder="e.g. Account Priority, Project Phase"/>
+        <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:20}}>
+          <Btn variant="ghost" onClick={()=>{setShowNewCat(false);setNewCatName("");}}>Cancel</Btn>
+          <Btn onClick={addCategory} disabled={!newCatName.trim()}>Create Category</Btn>
         </div>
-        <Alert type="info" >User will receive an SSO login invitation. Data scope can be configured after activation.</Alert>
-        <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:8}}>
-          <Btn variant="ghost" onClick={()=>setShowInvite(false)}>Cancel</Btn>
-          <Btn onClick={handleInvite} disabled={!inviteForm.name||!inviteForm.email}>Send Invitation</Btn>
+      </Modal>
+
+      {/* New Tag Modal */}
+      <Modal open={showNewTag} onClose={()=>{setShowNewTag(false);setNewTagVal("");}} title={`New Tag — ${activeCategory}`} width={440}>
+        <Input label="Tag Value" required value={newTagVal} onChange={setNewTagVal} placeholder="e.g. MPR-New Department"
+          hint={`Will be added to the "${activeCategory}" category`}/>
+        <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:20}}>
+          <Btn variant="ghost" onClick={()=>{setShowNewTag(false);setNewTagVal("");}}>Cancel</Btn>
+          <Btn onClick={addTag} disabled={!newTagVal.trim()}>Add Tag</Btn>
         </div>
       </Modal>
     </div>
   );
 }
 
-// ─── CUSTOMERS MODULE ──────────────────────────────────────────────────────
-function Customers(){
+// ═══════════════════════════════════════════════════════════════════════════
+// SETTINGS MODULE
+// ═══════════════════════════════════════════════════════════════════════════
+function Settings({entities,setEntities,taxRates,setTaxRates}){
+  const [tab,setTab]=useState("entities");
+  const [showNewEntity,setShowNewEntity]=useState(false);
+  const [showEditEntity,setShowEditEntity]=useState(false);
+  const [showNewTax,setShowNewTax]=useState(false);
+  const [selectedEntity,setSelectedEntity]=useState(null);
+  const [entityForm,setEntityForm]=useState({name:"",prefix:"",currency:"USD",address:"",bankName:"",accountName:"",accountNumber:"",swift:"",iban:""});
+  const [taxForm,setTaxForm]=useState({name:"",country:"",percentage:"",taxNumberLabel:"",active:true});
+  const [entityErrors,setEntityErrors]=useState({});
+
+  const validateEntity=()=>{
+    const errs={};
+    if(!entityForm.name.trim())errs.name="Entity name is required";
+    if(!entityForm.prefix.trim())errs.prefix="Invoice prefix is required";
+    if(entityForm.prefix.trim().length>6)errs.prefix="Prefix must be 6 characters or fewer";
+    setEntityErrors(errs);
+    return Object.keys(errs).length===0;
+  };
+
+  const saveEntity=()=>{
+    if(!validateEntity())return;
+    if(showEditEntity&&selectedEntity){
+      setEntities(p=>p.map(e=>e.id===selectedEntity.id?{...e,...entityForm}:e));
+    } else {
+      setEntities(p=>[...p,{...entityForm,id:genId("ENT"),active:true,prefix:entityForm.prefix.toUpperCase()}]);
+    }
+    setShowNewEntity(false);setShowEditEntity(false);setSelectedEntity(null);
+    setEntityForm({name:"",prefix:"",currency:"USD",address:"",bankName:"",accountName:"",accountNumber:"",swift:"",iban:""});
+    setEntityErrors({});
+  };
+
+  const editEntity=(ent)=>{
+    setSelectedEntity(ent);
+    setEntityForm({name:ent.name,prefix:ent.prefix,currency:ent.currency,address:ent.address,bankName:ent.bankName,accountName:ent.accountName,accountNumber:ent.accountNumber,swift:ent.swift,iban:ent.iban});
+    setShowEditEntity(true);
+  };
+
+  const saveTax=()=>{
+    if(!taxForm.name||!taxForm.country||!taxForm.percentage)return;
+    setTaxRates(p=>[...p,{...taxForm,id:genId("TAX"),percentage:parseFloat(taxForm.percentage)}]);
+    setTaxForm({name:"",country:"",percentage:"",taxNumberLabel:"",active:true});
+    setShowNewTax(false);
+  };
+
+  const EntityForm=()=>(
+    <>
+      <FormSection title="Entity Details">
+        <FormRow>
+          <Input label="Entity Name" required value={entityForm.name} onChange={v=>setEntityForm(p=>({...p,name:v}))} placeholder="e.g. Freyr Singapore" error={entityErrors.name}/>
+          <Input label="Invoice Prefix" required value={entityForm.prefix} onChange={v=>setEntityForm(p=>({...p,prefix:v.toUpperCase()}))} placeholder="e.g. FRSG" error={entityErrors.prefix} hint="Used in invoice numbers e.g. FRSG2026-0001"/>
+        </FormRow>
+        <FormRow>
+          <Select label="Default Currency" value={entityForm.currency} onChange={v=>setEntityForm(p=>({...p,currency:v}))} options={CURRENCIES.map(c=>({value:c,label:c}))}/>
+        </FormRow>
+        <Textarea label="Registered Address" value={entityForm.address} onChange={v=>setEntityForm(p=>({...p,address:v}))} placeholder="Full registered address" rows={2}/>
+      </FormSection>
+      <FormSection title="Bank Details (shown on invoice footer)">
+        <FormRow>
+          <Input label="Bank Name" value={entityForm.bankName} onChange={v=>setEntityForm(p=>({...p,bankName:v}))} placeholder="e.g. JP Morgan Chase"/>
+          <Input label="Account Name" value={entityForm.accountName} onChange={v=>setEntityForm(p=>({...p,accountName:v}))} placeholder="e.g. Freyr LLC"/>
+        </FormRow>
+        <FormRow>
+          <Input label="Account Number" value={entityForm.accountNumber} onChange={v=>setEntityForm(p=>({...p,accountNumber:v}))} placeholder="e.g. 1234567890"/>
+          <Input label="SWIFT / BIC" value={entityForm.swift} onChange={v=>setEntityForm(p=>({...p,swift:v}))} placeholder="e.g. CHASUS33"/>
+        </FormRow>
+        <FormRow cols={1}>
+          <Input label="IBAN (if applicable)" value={entityForm.iban} onChange={v=>setEntityForm(p=>({...p,iban:v}))} placeholder="e.g. DE89 3704 0044 0532 0130 00"/>
+        </FormRow>
+      </FormSection>
+    </>
+  );
+
+  return(
+    <div>
+      <SectionHeader title="Settings" sub="Platform configuration — Freyr entities, tax rates, and system defaults"/>
+      <Tabs tabs={[{key:"entities",label:"Freyr Entities"},{key:"tax",label:"Tax Master"},{key:"about",label:"System Info"}]} active={tab} onChange={setTab}/>
+
+      {tab==="entities"&&(
+        <div>
+          <div style={{display:"flex",justifyContent:"flex-end",marginBottom:16}}>
+            <Btn size="sm" onClick={()=>{setEntityForm({name:"",prefix:"",currency:"USD",address:"",bankName:"",accountName:"",accountNumber:"",swift:"",iban:""});setEntityErrors({});setShowNewEntity(true);}}>+ New Entity</Btn>
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:16}}>
+            {entities.map(ent=>(
+              <Card key={ent.id}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
+                  <div>
+                    <div style={{fontWeight:700,fontSize:16}}>{ent.name}</div>
+                    <div style={{display:"flex",gap:8,marginTop:4}}>
+                      <Badge color="blue">Prefix: {ent.prefix}</Badge>
+                      <Badge color="gray">{ent.currency}</Badge>
+                      {ent.active?<Badge color="green" dot>Active</Badge>:<Badge color="gray" dot>Inactive</Badge>}
+                    </div>
+                  </div>
+                  <Btn variant="secondary" size="sm" onClick={()=>editEntity(ent)}>Edit</Btn>
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,fontSize:13}}>
+                  <div>
+                    <div style={{color:C.textMuted,fontSize:11,fontWeight:600,textTransform:"uppercase",marginBottom:4}}>Address</div>
+                    <div style={{color:C.textSub}}>{ent.address||<span style={{color:C.textMuted,fontStyle:"italic"}}>Not set</span>}</div>
+                  </div>
+                  <div>
+                    <div style={{color:C.textMuted,fontSize:11,fontWeight:600,textTransform:"uppercase",marginBottom:4}}>Bank Details</div>
+                    {ent.bankName?(
+                      <div style={{color:C.textSub,lineHeight:1.8}}>
+                        <div><strong>Bank:</strong> {ent.bankName}</div>
+                        <div><strong>Account:</strong> {ent.accountName} — {ent.accountNumber}</div>
+                        {ent.swift&&<div><strong>SWIFT:</strong> {ent.swift}</div>}
+                        {ent.iban&&<div><strong>IBAN:</strong> {ent.iban}</div>}
+                      </div>
+                    ):<span style={{color:C.textMuted,fontStyle:"italic",fontSize:12}}>Bank details not yet configured. Add them so they appear on invoice footers.</span>}
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {tab==="tax"&&(
+        <div>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+            <Alert type="info">Tax rates defined here are available when creating invoices. Different countries can have different tax types and percentages.</Alert>
+            <Btn size="sm" onClick={()=>setShowNewTax(true)} style={{flexShrink:0,marginLeft:12}}>+ New Tax Rate</Btn>
+          </div>
+          {taxRates.length===0&&(
+            <Card>
+              <div style={{textAlign:"center",padding:"40px 0",color:C.textMuted}}>
+                <div style={{fontSize:32,marginBottom:8}}>🧾</div>
+                <div style={{fontWeight:600,marginBottom:4}}>No tax rates configured</div>
+                <div style={{fontSize:13}}>Add tax rates for the countries you invoice in. These will appear as options when creating invoices.</div>
+              </div>
+            </Card>
+          )}
+          {taxRates.length>0&&(
+            <Table cols={[
+              {key:"name",label:"Tax Name",render:r=><strong>{r.name}</strong>},
+              {key:"country",label:"Country"},
+              {key:"percentage",label:"Rate",right:true,render:r=><Badge color="blue">{r.percentage}%</Badge>},
+              {key:"taxNumberLabel",label:"Tax Number Label",render:r=>r.taxNumberLabel||<span style={{color:C.textMuted}}>—</span>},
+              {key:"active",label:"Status",render:r=><Badge color={r.active?"green":"gray"} dot>{r.active?"Active":"Inactive"}</Badge>},
+              {key:"actions",label:"",render:r=>(
+                <div style={{display:"flex",gap:6}}>
+                  <Btn variant="ghost" size="sm" onClick={()=>setTaxRates(p=>p.map(t=>t.id===r.id?{...t,active:!t.active}:t))}>{r.active?"Deactivate":"Activate"}</Btn>
+                  <Btn variant="ghost" size="sm" onClick={()=>setTaxRates(p=>p.filter(t=>t.id!==r.id))}>Remove</Btn>
+                </div>
+              )},
+            ]} rows={taxRates}/>
+          )}
+        </div>
+      )}
+
+      {tab==="about"&&(
+        <Card>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:24}}>
+            {[["Platform","Freyr Pulse"],["Version","Session A"],["Deployment","Vercel (auto-deploy)"],["Repository","github.com/manojfreyr/freyr-pulse"],["Frontend","React (single file)"],["Backend","None — frontend prototype"],["Data Persistence","Session only (resets on refresh)"],["Reporting Currency","USD"],].map(([l,v])=>(
+              <div key={l} style={{paddingBottom:12,borderBottom:`1px solid ${C.border}`}}>
+                <div style={{fontSize:11,color:C.textMuted,fontWeight:600,textTransform:"uppercase",marginBottom:2}}>{l}</div>
+                <div style={{fontSize:13,fontWeight:600,color:C.text}}>{v}</div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {/* New/Edit Entity Modal */}
+      <Modal open={showNewEntity||showEditEntity} onClose={()=>{setShowNewEntity(false);setShowEditEntity(false);setSelectedEntity(null);setEntityErrors({});}} title={showEditEntity?`Edit — ${selectedEntity?.name}`:"New Freyr Entity"} width={680}>
+        <EntityForm/>
+        <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:4}}>
+          <Btn variant="ghost" onClick={()=>{setShowNewEntity(false);setShowEditEntity(false);setSelectedEntity(null);setEntityErrors({});}}>Cancel</Btn>
+          <Btn onClick={saveEntity}>Save Entity</Btn>
+        </div>
+      </Modal>
+
+      {/* New Tax Modal */}
+      <Modal open={showNewTax} onClose={()=>{setShowNewTax(false);setTaxForm({name:"",country:"",percentage:"",taxNumberLabel:"",active:true});}} title="New Tax Rate" width={480}>
+        <FormRow>
+          <Input label="Tax Name" required value={taxForm.name} onChange={v=>setTaxForm(p=>({...p,name:v}))} placeholder="e.g. VAT, GST, Sales Tax"/>
+          <Input label="Country" required value={taxForm.country} onChange={v=>setTaxForm(p=>({...p,country:v}))} placeholder="e.g. Germany"/>
+        </FormRow>
+        <FormRow>
+          <Input label="Percentage (%)" required type="number" value={taxForm.percentage} onChange={v=>setTaxForm(p=>({...p,percentage:v}))} placeholder="e.g. 19"/>
+          <Input label="Tax Number Label" value={taxForm.taxNumberLabel} onChange={v=>setTaxForm(p=>({...p,taxNumberLabel:v}))} placeholder="e.g. VAT Number, GST Number"/>
+        </FormRow>
+        {taxForm.percentage&&<Alert type="info">At {taxForm.percentage}%, an invoice of $10,000 would have {taxForm.name||"tax"} of ${((parseFloat(taxForm.percentage)||0)/100*10000).toFixed(2)}.</Alert>}
+        <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:8}}>
+          <Btn variant="ghost" onClick={()=>setShowNewTax(false)}>Cancel</Btn>
+          <Btn onClick={saveTax} disabled={!taxForm.name||!taxForm.country||!taxForm.percentage}>Save Tax Rate</Btn>
+        </div>
+      </Modal>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CUSTOMERS MODULE
+// ═══════════════════════════════════════════════════════════════════════════
+function Customers({tags,users,customers,setCustomers,contracts}){
   const [view,setView]=useState("list");
   const [selected,setSelected]=useState(null);
   const [showNew,setShowNew]=useState(false);
-  const [customers,setCustomers]=useState(CUSTOMERS);
   const [search,setSearch]=useState("");
-  const [form,setForm]=useState({name:"",type:"Pharma",region:"North America",country:"US",status:"Active",strategic:false});
+  const [filterStatus,setFilterStatus]=useState("All");
+  const [filterType,setFilterType]=useState("All");
+  const [form,setForm]=useState(blankCustomerForm());
+  const [errors,setErrors]=useState({});
+  const [detailTab,setDetailTab]=useState("overview");
 
-  const filtered=customers.filter(c=>c.name.toLowerCase().includes(search.toLowerCase()));
+  function blankCustomerForm(){
+    return {name:"",addressLine1:"",addressLine2:"",city:"",state:"",zip:"",country:"",psaStart:"",psaEnd:"",customerType:"",accountOwner:"",status:"Active",notes:""};
+  }
+
+  const customerTypes=tags["Customer Type"]||[];
+  const countries=tags["Work Country"]||[];
+  const activeUsers=users.filter(u=>u.status==="Active");
+
+  const validate=()=>{
+    const e={};
+    if(!form.name.trim())e.name="Customer name is required";
+    else if(customers.some(c=>c.name.toLowerCase()===form.name.trim().toLowerCase()&&(!selected||c.id!==selected.id)))e.name="A customer with this name already exists";
+    if(!form.addressLine1.trim())e.addressLine1="Address is required";
+    if(!form.city.trim())e.city="City is required";
+    if(!form.state.trim())e.state="State / Province is required";
+    if(!form.zip.trim())e.zip="ZIP / Postal Code is required";
+    if(!form.country)e.country="Country is required";
+    if(!form.customerType)e.customerType="Customer type is required";
+    if(!form.accountOwner)e.accountOwner="Account Owner is required";
+    if(form.psaStart&&form.psaEnd&&form.psaStart>form.psaEnd)e.psaEnd="PSA End Date must be on or after Start Date";
+    setErrors(e);
+    return Object.keys(e).length===0;
+  };
+
+  const save=()=>{
+    if(!validate())return;
+    const c={...form,id:genId("CUST"),createdAt:today(),name:form.name.trim()};
+    setCustomers(p=>[...p,c]);
+    setShowNew(false);setForm(blankCustomerForm());setErrors({});
+  };
+
+  const openDetail=(c)=>{setSelected(c);setDetailTab("overview");setView("detail");};
+
+  const getCustomerContracts=(custId)=>contracts.filter(k=>k.customerId===custId);
+
+  const psaWarning=(c)=>{
+    if(!c.psaEnd)return null;
+    const days=Math.ceil((new Date(c.psaEnd)-new Date())/(1000*60*60*24));
+    if(days<0)return{type:"danger",msg:"PSA expired"};
+    if(days<=30)return{type:"warning",msg:`PSA expires in ${days} days`};
+    return null;
+  };
+
+  const filtered=customers.filter(c=>{
+    const matchSearch=c.name.toLowerCase().includes(search.toLowerCase())||c.country?.toLowerCase().includes(search.toLowerCase());
+    const matchStatus=filterStatus==="All"||c.status===filterStatus;
+    const matchType=filterType==="All"||c.customerType===filterType;
+    return matchSearch&&matchStatus&&matchType;
+  });
+
+  const F=({field,label,col=1,...rest})=>(
+    <div style={{gridColumn:`span ${col}`}}>
+      <Input label={label} value={form[field]} onChange={v=>setForm(p=>({...p,[field]:v}))} error={errors[field]} {...rest}/>
+    </div>
+  );
 
   return(
     <div>
-      <SectionHeader title="Customers" sub={`${customers.filter(c=>c.status==="Active").length} active accounts`}
-        action={<Btn size="sm" onClick={()=>setShowNew(true)}>+ New Customer</Btn>}/>
       {view==="list"&&(
-        <Card style={{padding:0}}>
-          <div style={{padding:"14px 20px",display:"flex",gap:12,borderBottom:`1px solid ${C.border}`}}>
-            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search customers..." style={{flex:1,border:`1.5px solid ${C.border}`,borderRadius:6,padding:"7px 11px",fontSize:13,outline:"none"}}/>
+        <>
+          <SectionHeader title="Customers" sub={`${customers.filter(c=>c.status==="Active").length} active customers`}
+            action={<Btn size="sm" onClick={()=>{setForm(blankCustomerForm());setErrors({});setShowNew(true);}}>+ New Customer</Btn>}/>
+
+          <div style={{display:"flex",gap:12,marginBottom:16,flexWrap:"wrap"}}>
+            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search by name or country…"
+              style={{flex:1,minWidth:200,border:`1.5px solid ${C.border}`,borderRadius:6,padding:"7px 11px",fontSize:13,outline:"none"}}/>
+            <Select value={filterStatus} onChange={setFilterStatus} options={["All","Active","Inactive"]} style={{width:130}}/>
+            <Select value={filterType} onChange={setFilterType} placeholder="All Types" options={[{value:"All",label:"All Types"},...customerTypes.map(t=>({value:t,label:t}))]} style={{width:180}}/>
           </div>
-          <Table cols={[
-            {key:"name",label:"Customer",render:r=><div><div style={{fontWeight:600}}>{r.name}{r.strategic&&<Badge color="purple" style={{marginLeft:6}}>Strategic</Badge>}</div><div style={{fontSize:11,color:C.textMuted}}>{r.type} · {r.country}</div></div>},
-            {key:"region",label:"Region"},
-            {key:"projects",label:"Projects",right:true},
-            {key:"revenue",label:"Forecast",right:true,render:r=><strong>{fmtM(r.revenue)}</strong>},
-            {key:"deliveryOwner",label:"Delivery Owner"},
-            {key:"status",label:"Status",render:r=><Badge color={r.status==="Active"?"green":"gray"} dot>{r.status}</Badge>},
-            {key:"actions",label:"",render:r=><Btn size="sm" variant="ghost" onClick={()=>{setSelected(r);setView("detail");}}>View →</Btn>},
-          ]} rows={filtered}/>
-        </Card>
+
+          {customers.length===0&&(
+            <Card>
+              <div style={{textAlign:"center",padding:"60px 0",color:C.textMuted}}>
+                <div style={{fontSize:40,marginBottom:12}}>🏢</div>
+                <div style={{fontWeight:700,fontSize:16,marginBottom:8,color:C.text}}>No customers yet</div>
+                <div style={{fontSize:13,marginBottom:20}}>Add your first customer to get started. Contracts and projects flow from customers.</div>
+                <Btn onClick={()=>{setForm(blankCustomerForm());setErrors({});setShowNew(true);}}>+ Add First Customer</Btn>
+              </div>
+            </Card>
+          )}
+
+          {customers.length>0&&(
+            <Card style={{padding:0}}>
+              <Table cols={[
+                {key:"id",label:"Customer ID",render:r=><span style={{fontFamily:"monospace",fontSize:11,color:C.textMuted}}>{r.id}</span>},
+                {key:"name",label:"Customer",render:r=>{
+                  const warn=psaWarning(r);
+                  return<div>
+                    <div style={{fontWeight:600}}>{r.name}</div>
+                    <div style={{fontSize:11,color:C.textMuted}}>{r.customerType} · {r.country}</div>
+                    {warn&&<Badge color={warn.type==="danger"?"red":"amber"}>{warn.msg}</Badge>}
+                  </div>;
+                }},
+                {key:"accountOwner",label:"Account Owner"},
+                {key:"contracts",label:"Contracts",right:true,render:r=><span style={{fontWeight:600}}>{getCustomerContracts(r.id).length}</span>},
+                {key:"status",label:"Status",render:r=><Badge color={r.status==="Active"?"green":"gray"} dot>{r.status}</Badge>},
+                {key:"createdAt",label:"Created"},
+                {key:"actions",label:"",render:r=><Btn size="sm" variant="ghost" onClick={()=>openDetail(r)}>View →</Btn>},
+              ]} rows={filtered} emptyMsg="No customers match your search."/>
+            </Card>
+          )}
+        </>
       )}
+
       {view==="detail"&&selected&&(
         <div>
-          <Btn variant="ghost" size="sm" onClick={()=>setView("list")} style={{marginBottom:16}}>← Back to list</Btn>
+          <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:20}}>
+            <Btn variant="ghost" size="sm" onClick={()=>setView("list")}>← Back</Btn>
+            <div style={{flex:1}}>
+              <h2 style={{margin:0,fontSize:20,fontWeight:700}}>{selected.name}</h2>
+              <div style={{fontSize:13,color:C.textSub}}>{selected.customerType} · {selected.country}</div>
+            </div>
+            <Badge color={selected.status==="Active"?"green":"gray"} dot>{selected.status}</Badge>
+          </div>
+
+          {psaWarning(selected)&&<Alert type={psaWarning(selected).type}>{psaWarning(selected).msg} — PSA End Date: {selected.psaEnd}</Alert>}
+
+          <div style={{display:"grid",gridTemplateColumns:"1fr 320px",gap:20}}>
+            <div>
+              <Tabs tabs={[{key:"overview",label:"Overview"},{key:"contracts",label:`Contracts (${getCustomerContracts(selected.id).length})`},{key:"documents",label:"Documents"}]} active={detailTab} onChange={setDetailTab}/>
+
+              {detailTab==="overview"&&(
+                <Card>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20}}>
+                    <div>
+                      <FormSection title="Address">
+                        <div style={{fontSize:13,color:C.text,lineHeight:2}}>
+                          <div>{selected.addressLine1}</div>
+                          {selected.addressLine2&&<div>{selected.addressLine2}</div>}
+                          <div>{selected.city}{selected.state?`, ${selected.state}`:""} {selected.zip}</div>
+                          <div>{selected.country}</div>
+                        </div>
+                      </FormSection>
+                    </div>
+                    <div>
+                      <FormSection title="PSA Details">
+                        {selected.psaStart||selected.psaEnd?(
+                          <div style={{fontSize:13,lineHeight:2}}>
+                            {selected.psaStart&&<div><strong>Start:</strong> {selected.psaStart}</div>}
+                            {selected.psaEnd&&<div><strong>End:</strong> {selected.psaEnd}</div>}
+                          </div>
+                        ):<div style={{fontSize:13,color:C.textMuted,fontStyle:"italic"}}>No PSA dates recorded</div>}
+                      </FormSection>
+                    </div>
+                  </div>
+                  {selected.notes&&<div style={{marginTop:12,padding:12,background:C.bg,borderRadius:6,fontSize:13,color:C.textSub}}>{selected.notes}</div>}
+                </Card>
+              )}
+
+              {detailTab==="contracts"&&(
+                <Card style={{padding:0}}>
+                  {getCustomerContracts(selected.id).length===0?(
+                    <div style={{textAlign:"center",padding:"40px",color:C.textMuted}}>
+                      <div style={{fontSize:13}}>No contracts linked to this customer yet.</div>
+                    </div>
+                  ):(
+                    <Table cols={[
+                      {key:"contractName",label:"Contract Name",render:r=><strong>{r.contractName}</strong>},
+                      {key:"ref",label:"Reference"},
+                      {key:"currency",label:"CCY"},
+                      {key:"value",label:"Value",right:true,render:r=>r.value?`${r.currency} ${fmtN(r.value)}`:"—"},
+                      {key:"status",label:"Status",render:r=><Badge color={r.status==="Active"?"green":r.status==="Closed"?"gray":r.status==="On Hold"?"amber":"red"} dot>{r.status}</Badge>},
+                      {key:"endDate",label:"End Date"},
+                    ]} rows={getCustomerContracts(selected.id)}/>
+                  )}
+                </Card>
+              )}
+
+              {detailTab==="documents"&&(
+                <Card>
+                  <UploadPlaceholder label="MSA / PSA Document"/>
+                  <div style={{marginTop:12,fontSize:12,color:C.textMuted,textAlign:"center"}}>Document storage requires backend integration. This is a placeholder.</div>
+                </Card>
+              )}
+            </div>
+
+            {/* Side panel */}
+            <Card>
+              <div style={{fontWeight:700,marginBottom:16}}>Account Details</div>
+              {[
+                ["Customer ID",<span style={{fontFamily:"monospace",fontSize:11}}>{selected.id}</span>],
+                ["Account Owner",selected.accountOwner],
+                ["Customer Type",<Badge color="blue">{selected.customerType}</Badge>],
+                ["Status",<Badge color={selected.status==="Active"?"green":"gray"} dot>{selected.status}</Badge>],
+                ["Country",selected.country],
+                ["Created",selected.createdAt],
+                ["Contracts",getCustomerContracts(selected.id).length],
+              ].map(([l,v])=>(
+                <div key={l} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:`1px solid ${C.border}`,fontSize:13}}>
+                  <span style={{color:C.textSub}}>{l}</span><span style={{fontWeight:600}}>{v}</span>
+                </div>
+              ))}
+            </Card>
+          </div>
+        </div>
+      )}
+
+      {/* New Customer Modal */}
+      <Modal open={showNew} onClose={()=>{setShowNew(false);setErrors({});}} title="New Customer" width={720}>
+        <FormSection title="Customer Identity">
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+            <div style={{gridColumn:"span 2"}}>
+              <Input label="Customer Name" required value={form.name} onChange={v=>setForm(p=>({...p,name:v}))} error={errors.name} placeholder="e.g. Johnson & Johnson"/>
+            </div>
+            <Select label="Customer Type" required value={form.customerType} onChange={v=>setForm(p=>({...p,customerType:v}))} placeholder="Select type" options={customerTypes.map(t=>({value:t,label:t}))} error={errors.customerType}/>
+            <Select label="Account Owner" required value={form.accountOwner} onChange={v=>setForm(p=>({...p,accountOwner:v}))} placeholder="Select user" options={activeUsers.map(u=>({value:u.name,label:`${u.name} (${u.role})`}))} error={errors.accountOwner}/>
+            <Select label="Status" value={form.status} onChange={v=>setForm(p=>({...p,status:v}))} options={CUSTOMER_STATUSES.map(s=>({value:s,label:s}))}/>
+          </div>
+        </FormSection>
+
+        <FormSection title="Billing Address">
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+            <div style={{gridColumn:"span 2"}}>
+              <Input label="Address Line 1" required value={form.addressLine1} onChange={v=>setForm(p=>({...p,addressLine1:v}))} error={errors.addressLine1} placeholder="Street address"/>
+            </div>
+            <div style={{gridColumn:"span 2"}}>
+              <Input label="Address Line 2" value={form.addressLine2} onChange={v=>setForm(p=>({...p,addressLine2:v}))} placeholder="Suite, floor, building (optional)"/>
+            </div>
+            <Input label="City" required value={form.city} onChange={v=>setForm(p=>({...p,city:v}))} error={errors.city}/>
+            <Input label="State / Province" required value={form.state} onChange={v=>setForm(p=>({...p,state:v}))} error={errors.state}/>
+            <Input label="ZIP / Postal Code" required value={form.zip} onChange={v=>setForm(p=>({...p,zip:v}))} error={errors.zip}/>
+            <Select label="Country" required value={form.country} onChange={v=>setForm(p=>({...p,country:v}))} placeholder="Select country" options={countries.map(c=>({value:c,label:c}))} error={errors.country}/>
+          </div>
+        </FormSection>
+
+        <FormSection title="PSA / Master Agreement">
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+            <Input label="PSA Start Date" type="date" value={form.psaStart} onChange={v=>setForm(p=>({...p,psaStart:v}))}/>
+            <Input label="PSA End Date" type="date" value={form.psaEnd} onChange={v=>setForm(p=>({...p,psaEnd:v}))} error={errors.psaEnd}/>
+          </div>
+          <div style={{marginTop:12}}><UploadPlaceholder label="PSA / MSA Document"/></div>
+        </FormSection>
+
+        <FormSection title="Notes">
+          <Textarea value={form.notes} onChange={v=>setForm(p=>({...p,notes:v}))} placeholder="Any additional notes about this customer…"/>
+        </FormSection>
+
+        <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+          <Btn variant="ghost" onClick={()=>{setShowNew(false);setErrors({});}}>Cancel</Btn>
+          <Btn onClick={save}>Save Customer</Btn>
+        </div>
+      </Modal>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CONTRACTS MODULE
+// ═══════════════════════════════════════════════════════════════════════════
+function Contracts({tags,customers,contracts,setContracts,entities}){
+  const [view,setView]=useState("list");
+  const [selected,setSelected]=useState(null);
+  const [showNew,setShowNew]=useState(false);
+  const [search,setSearch]=useState("");
+  const [filterStatus,setFilterStatus]=useState("All");
+  const [form,setForm]=useState(blankContractForm());
+  const [errors,setErrors]=useState({});
+  const [detailTab,setDetailTab]=useState("overview");
+  const [customPaymentTerm,setCustomPaymentTerm]=useState("");
+
+  function blankContractForm(){
+    return {contractName:"",customerId:"",customerName:"",ref:"",startDate:"",endDate:"",value:"",currency:"USD",paymentTerms:"NET 30",customPaymentTerms:"",freyrEntity:"",status:"Draft",tags:{},notes:""};
+  }
+
+  const activeCustomers=customers.filter(c=>c.status==="Active");
+  const activeEntities=entities.filter(e=>e.active);
+  const tagCategories=Object.keys(tags);
+
+  const validate=()=>{
+    const e={};
+    if(!form.contractName.trim())e.contractName="Contract name is required";
+    if(!form.customerId)e.customerId="Customer is required";
+    if(!form.startDate)e.startDate="Start date is required";
+    if(!form.endDate)e.endDate="End date is required";
+    if(form.startDate&&form.endDate&&form.startDate>form.endDate)e.endDate="End date must be after start date";
+    if(!form.currency)e.currency="Currency is required";
+    if(!form.paymentTerms)e.paymentTerms="Payment terms are required";
+    if(form.paymentTerms==="Custom"&&!form.customPaymentTerms.trim())e.customPaymentTerms="Please specify custom payment terms";
+    if(!form.freyrEntity)e.freyrEntity="Freyr entity is required";
+    if(!form.status)e.status="Status is required";
+    setErrors(e);
+    return Object.keys(e).length===0;
+  };
+
+  const save=()=>{
+    if(!validate())return;
+    const effectivePT=form.paymentTerms==="Custom"?form.customPaymentTerms:form.paymentTerms;
+    const c={...form,id:genId("CONT"),createdAt:today(),paymentTermsDisplay:effectivePT,value:form.value?parseFloat(form.value):null};
+    setContracts(p=>[...p,c]);
+    setShowNew(false);setForm(blankContractForm());setErrors({});
+  };
+
+  const openDetail=(c)=>{setSelected(c);setDetailTab("overview");setView("detail");};
+
+  const expiryWarning=(c)=>{
+    if(!c.endDate)return null;
+    const days=Math.ceil((new Date(c.endDate)-new Date())/(1000*60*60*24));
+    if(c.status==="Closed"||c.status==="Cancelled")return null;
+    if(days<0)return{type:"danger",msg:`Expired ${Math.abs(days)} days ago`};
+    if(days<=30)return{type:"warning",msg:`Expires in ${days} days`};
+    if(days<=90)return{type:"info",msg:`Expires in ${days} days`};
+    return null;
+  };
+
+  const filtered=contracts.filter(c=>{
+    const matchSearch=c.contractName?.toLowerCase().includes(search.toLowerCase())||c.customerName?.toLowerCase().includes(search.toLowerCase())||c.ref?.toLowerCase().includes(search.toLowerCase());
+    const matchStatus=filterStatus==="All"||c.status===filterStatus;
+    return matchSearch&&matchStatus;
+  });
+
+  return(
+    <div>
+      {view==="list"&&(
+        <>
+          <SectionHeader title="Contracts" sub={`${contracts.filter(c=>c.status==="Active").length} active contracts`}
+            action={<Btn size="sm" onClick={()=>{
+              if(customers.length===0){alert("Please create a customer before adding a contract.");return;}
+              setForm(blankContractForm());setErrors({});setShowNew(true);
+            }}>+ New Contract</Btn>}/>
+
+          <div style={{display:"flex",gap:12,marginBottom:16,flexWrap:"wrap"}}>
+            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search by name, customer or reference…"
+              style={{flex:1,minWidth:200,border:`1.5px solid ${C.border}`,borderRadius:6,padding:"7px 11px",fontSize:13,outline:"none"}}/>
+            <Select value={filterStatus} onChange={setFilterStatus} options={["All",...CONTRACT_STATUSES]} style={{width:150}}/>
+          </div>
+
+          {contracts.length===0&&(
+            <Card>
+              <div style={{textAlign:"center",padding:"60px 0",color:C.textMuted}}>
+                <div style={{fontSize:40,marginBottom:12}}>📋</div>
+                <div style={{fontWeight:700,fontSize:16,marginBottom:8,color:C.text}}>No contracts yet</div>
+                <div style={{fontSize:13,marginBottom:4}}>Contracts must be linked to an existing customer.</div>
+                {customers.length===0&&<Alert type="warning">You need to create a customer first before adding contracts.</Alert>}
+                {customers.length>0&&<Btn onClick={()=>{setForm(blankContractForm());setErrors({});setShowNew(true);}}>+ Add First Contract</Btn>}
+              </div>
+            </Card>
+          )}
+
+          {contracts.length>0&&(
+            <Card style={{padding:0}}>
+              <Table cols={[
+                {key:"id",label:"Contract ID",render:r=><span style={{fontFamily:"monospace",fontSize:11,color:C.textMuted}}>{r.id}</span>},
+                {key:"contractName",label:"Contract",render:r=>(
+                  <div>
+                    <div style={{fontWeight:600}}>{r.contractName}</div>
+                    <div style={{fontSize:11,color:C.textMuted}}>{r.customerName} {r.ref?`· ${r.ref}`:""}</div>
+                    {expiryWarning(r)&&<Badge color={expiryWarning(r).type==="danger"?"red":expiryWarning(r).type==="warning"?"amber":"blue"}>{expiryWarning(r).msg}</Badge>}
+                  </div>
+                )},
+                {key:"freyrEntity",label:"Freyr Entity"},
+                {key:"currency",label:"CCY"},
+                {key:"value",label:"Value",right:true,render:r=>r.value?`${r.currency} ${fmtN(r.value)}`:<span style={{color:C.textMuted}}>—</span>},
+                {key:"paymentTermsDisplay",label:"Payment Terms"},
+                {key:"endDate",label:"End Date",render:r=>{
+                  const w=expiryWarning(r);
+                  return<span style={{color:w?.type==="danger"?C.danger:w?.type==="warning"?C.warning:C.text}}>{r.endDate||"—"}</span>;
+                }},
+                {key:"status",label:"Status",render:r=><Badge color={r.status==="Active"?"green":r.status==="Draft"?"blue":r.status==="On Hold"?"amber":r.status==="Closed"?"gray":"red"} dot>{r.status}</Badge>},
+                {key:"actions",label:"",render:r=><Btn size="sm" variant="ghost" onClick={()=>openDetail(r)}>View →</Btn>},
+              ]} rows={filtered} emptyMsg="No contracts match your search."/>
+            </Card>
+          )}
+        </>
+      )}
+
+      {view==="detail"&&selected&&(
+        <div>
+          <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:20}}>
+            <Btn variant="ghost" size="sm" onClick={()=>setView("list")}>← Back</Btn>
+            <div style={{flex:1}}>
+              <h2 style={{margin:0,fontSize:20,fontWeight:700}}>{selected.contractName}</h2>
+              <div style={{fontSize:13,color:C.textSub}}>{selected.customerName} {selected.ref?`· Ref: ${selected.ref}`:""}</div>
+            </div>
+            <Badge color={selected.status==="Active"?"green":selected.status==="Draft"?"blue":selected.status==="On Hold"?"amber":"gray"} dot>{selected.status}</Badge>
+          </div>
+
+          {expiryWarning(selected)&&<Alert type={expiryWarning(selected).type}>{expiryWarning(selected).msg} — End Date: {selected.endDate}</Alert>}
+
+          <div style={{display:"grid",gridTemplateColumns:"1fr 300px",gap:20}}>
+            <div>
+              <Tabs tabs={[{key:"overview",label:"Overview"},{key:"tags",label:"Contract Tags"},{key:"documents",label:"Documents"}]} active={detailTab} onChange={setDetailTab}/>
+
+              {detailTab==="overview"&&(
+                <Card>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20}}>
+                    <FormSection title="Commercial Terms">
+                      {[["Currency",selected.currency],["Payment Terms",selected.paymentTermsDisplay||selected.paymentTerms],["Contract Value",selected.value?`${selected.currency} ${fmtN(selected.value)}`:"Not specified"],["Freyr Entity",selected.freyrEntity],].map(([l,v])=>(
+                        <div key={l} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:`1px solid ${C.border}`,fontSize:13}}>
+                          <span style={{color:C.textSub}}>{l}</span><strong>{v}</strong>
+                        </div>
+                      ))}
+                    </FormSection>
+                    <FormSection title="Period">
+                      {[["Start Date",selected.startDate],["End Date",selected.endDate],["Status",selected.status]].map(([l,v])=>(
+                        <div key={l} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:`1px solid ${C.border}`,fontSize:13}}>
+                          <span style={{color:C.textSub}}>{l}</span><strong>{v}</strong>
+                        </div>
+                      ))}
+                    </FormSection>
+                  </div>
+                  {selected.notes&&<div style={{marginTop:12,padding:12,background:C.bg,borderRadius:6,fontSize:13,color:C.textSub}}>{selected.notes}</div>}
+                </Card>
+              )}
+
+              {detailTab==="tags"&&(
+                <Card>
+                  {Object.keys(selected.tags||{}).length===0?(
+                    <div style={{textAlign:"center",padding:"40px",color:C.textMuted,fontSize:13}}>No contract-level tags assigned.</div>
+                  ):(
+                    <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+                      {Object.entries(selected.tags||{}).map(([cat,vals])=>
+                        (Array.isArray(vals)?vals:[vals]).map(v=>(
+                          <div key={`${cat}-${v}`} style={{display:"flex",flexDirection:"column",gap:2}}>
+                            <span style={{fontSize:10,color:C.textMuted,textTransform:"uppercase"}}>{cat}</span>
+                            <Badge color="blue">{v}</Badge>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </Card>
+              )}
+
+              {detailTab==="documents"&&(
+                <Card><UploadPlaceholder label="Contract Document"/></Card>
+              )}
+            </div>
+
+            <Card>
+              <div style={{fontWeight:700,marginBottom:16}}>Contract Summary</div>
+              {[
+                ["Contract ID",<span style={{fontFamily:"monospace",fontSize:11}}>{selected.id}</span>],
+                ["Customer",selected.customerName],
+                ["Freyr Entity",selected.freyrEntity],
+                ["Currency",selected.currency],
+                ["Value",selected.value?`${selected.currency} ${fmtN(selected.value)}`:"—"],
+                ["Payment Terms",selected.paymentTermsDisplay||selected.paymentTerms],
+                ["Created",selected.createdAt],
+              ].map(([l,v])=>(
+                <div key={l} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:`1px solid ${C.border}`,fontSize:13}}>
+                  <span style={{color:C.textSub}}>{l}</span><span style={{fontWeight:600,textAlign:"right",maxWidth:160}}>{v}</span>
+                </div>
+              ))}
+            </Card>
+          </div>
+        </div>
+      )}
+
+      {/* New Contract Modal */}
+      <Modal open={showNew} onClose={()=>{setShowNew(false);setErrors({});}} title="New Contract" width={760}>
+        <FormSection title="Contract Identity">
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+            <div style={{gridColumn:"span 2"}}>
+              <Input label="Contract Name" required value={form.contractName} onChange={v=>setForm(p=>({...p,contractName:v}))} error={errors.contractName} placeholder="e.g. J&J Master Services Agreement 2026"/>
+            </div>
+            <Select label="Customer" required value={form.customerId} onChange={v=>{
+              const c=customers.find(c=>c.id===v);
+              setForm(p=>({...p,customerId:v,customerName:c?.name||""}));
+            }} placeholder="Select customer" options={activeCustomers.map(c=>({value:c.id,label:c.name}))} error={errors.customerId}/>
+            <Input label="Contract Reference / SOW Number" value={form.ref} onChange={v=>setForm(p=>({...p,ref:v}))} placeholder="e.g. MSA-JNJ-2026 (optional)"/>
+          </div>
+        </FormSection>
+
+        <FormSection title="Commercial Terms">
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+            <Select label="Freyr Entity" required value={form.freyrEntity} onChange={v=>setForm(p=>({...p,freyrEntity:v}))} placeholder="Select entity" options={activeEntities.map(e=>({value:e.name,label:`${e.name} (${e.prefix})`}))} error={errors.freyrEntity}/>
+            <Select label="Currency" required value={form.currency} onChange={v=>setForm(p=>({...p,currency:v}))} options={CURRENCIES.map(c=>({value:c,label:c}))} error={errors.currency}/>
+            <Select label="Payment Terms" required value={form.paymentTerms} onChange={v=>setForm(p=>({...p,paymentTerms:v}))} options={PAYMENT_TERMS_OPTIONS.map(t=>({value:t,label:t}))} error={errors.paymentTerms}/>
+            {form.paymentTerms==="Custom"&&<Input label="Custom Payment Terms" required value={form.customPaymentTerms} onChange={v=>setForm(p=>({...p,customPaymentTerms:v}))} placeholder="e.g. NET 75, 50% upfront" error={errors.customPaymentTerms}/>}
+            <Input label="Contract Value (optional)" type="number" value={form.value} onChange={v=>setForm(p=>({...p,value:v}))} placeholder="Leave blank if not applicable" hint="Warning will show if invoice total exceeds this value"/>
+            <Select label="Contract Status" required value={form.status} onChange={v=>setForm(p=>({...p,status:v}))} options={CONTRACT_STATUSES.map(s=>({value:s,label:s}))}/>
+          </div>
+        </FormSection>
+
+        <FormSection title="Contract Period">
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+            <Input label="Start Date" required type="date" value={form.startDate} onChange={v=>setForm(p=>({...p,startDate:v}))} error={errors.startDate}/>
+            <Input label="End Date" required type="date" value={form.endDate} onChange={v=>setForm(p=>({...p,endDate:v}))} error={errors.endDate}/>
+          </div>
+        </FormSection>
+
+        <FormSection title="Contract-level Tags (optional)">
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
+            {["Work Country","Region","Customer Type"].map(cat=>(
+              tags[cat]&&<Select key={cat} label={cat} value={(form.tags||{})[cat]||""} onChange={v=>setForm(p=>({...p,tags:{...p.tags,[cat]:v}}))} placeholder={`Select ${cat}`} options={(tags[cat]||[]).map(t=>({value:t,label:t}))}/>
+            ))}
+          </div>
+        </FormSection>
+
+        <FormSection title="Notes">
+          <Textarea value={form.notes} onChange={v=>setForm(p=>({...p,notes:v}))} placeholder="Any commercial notes, scope limitations, or special terms…"/>
+        </FormSection>
+
+        <FormSection title="Contract Document">
+          <UploadPlaceholder label="Contract / SOW Document"/>
+        </FormSection>
+
+        <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+          <Btn variant="ghost" onClick={()=>{setShowNew(false);setErrors({});}}>Cancel</Btn>
+          <Btn onClick={save}>Save Contract</Btn>
+        </div>
+      </Modal>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// EMPLOYEES MODULE
+// ═══════════════════════════════════════════════════════════════════════════
+function Employees({tags,users,employees,setEmployees}){
+  const [view,setView]=useState("list");
+  const [selected,setSelected]=useState(null);
+  const [showNew,setShowNew]=useState(false);
+  const [search,setSearch]=useState("");
+  const [filterStatus,setFilterStatus]=useState("All");
+  const [form,setForm]=useState(blankEmpForm());
+  const [errors,setErrors]=useState({});
+
+  function blankEmpForm(){
+    return {name:"",email:"",status:"Active",baseCountry:"",baseDivision:"",baseDepartment:"",reportingManager:""};
+  }
+
+  const countries=tags["Work Country"]||[];
+  const divisions=tags["Division"]||[];
+  const departments=tags["Department"]||[];
+  const activeUsers=users.filter(u=>u.status==="Active");
+
+  const validate=()=>{
+    const e={};
+    if(!form.name.trim())e.name="Employee name is required";
+    if(form.email&&!isValidEmail(form.email))e.email="Please enter a valid email address";
+    if(!form.status)e.status="Employment status is required";
+    setErrors(e);
+    return Object.keys(e).length===0;
+  };
+
+  const save=()=>{
+    if(!validate())return;
+    const emp={...form,id:genId("EMP"),createdAt:today(),name:form.name.trim(),tagReviews:[]};
+    setEmployees(p=>[...p,emp]);
+    setShowNew(false);setForm(blankEmpForm());setErrors({});
+  };
+
+  const filtered=employees.filter(e=>{
+    const matchSearch=e.name.toLowerCase().includes(search.toLowerCase())||e.email?.toLowerCase().includes(search.toLowerCase());
+    const matchStatus=filterStatus==="All"||e.status===filterStatus;
+    return matchSearch&&matchStatus;
+  });
+
+  const statusColor=s=>s==="Active"?"green":s==="Inactive"?"gray":s==="Notice"?"amber":"purple";
+
+  return(
+    <div>
+      {view==="list"&&(
+        <>
+          <SectionHeader title="Employees" sub={`${employees.filter(e=>e.status==="Active").length} active employees`}
+            action={<Btn size="sm" onClick={()=>{setForm(blankEmpForm());setErrors({});setShowNew(true);}}>+ New Employee</Btn>}/>
+
+          <div style={{display:"flex",gap:12,marginBottom:16}}>
+            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search by name or email…"
+              style={{flex:1,border:`1.5px solid ${C.border}`,borderRadius:6,padding:"7px 11px",fontSize:13,outline:"none"}}/>
+            <Select value={filterStatus} onChange={setFilterStatus} options={["All",...EMP_STATUSES]} style={{width:150}}/>
+          </div>
+
+          {employees.length===0&&(
+            <Card>
+              <div style={{textAlign:"center",padding:"60px 0",color:C.textMuted}}>
+                <div style={{fontSize:40,marginBottom:12}}>👥</div>
+                <div style={{fontWeight:700,fontSize:16,marginBottom:8,color:C.text}}>No employees yet</div>
+                <div style={{fontSize:13,marginBottom:20}}>Add employees to assign them to projects and manage tag reviews.</div>
+                <Btn onClick={()=>{setForm(blankEmpForm());setErrors({});setShowNew(true);}}>+ Add First Employee</Btn>
+              </div>
+            </Card>
+          )}
+
+          {employees.length>0&&(
+            <Card style={{padding:0}}>
+              <Table cols={[
+                {key:"id",label:"Employee ID",render:r=><span style={{fontFamily:"monospace",fontSize:11,color:C.textMuted}}>{r.id}</span>},
+                {key:"name",label:"Employee",render:r=>(
+                  <div>
+                    <div style={{fontWeight:600}}>{r.name}</div>
+                    {r.email&&<div style={{fontSize:11,color:C.textMuted}}>{r.email}</div>}
+                  </div>
+                )},
+                {key:"baseDivision",label:"Division",render:r=>r.baseDivision?<Badge color="blue">{r.baseDivision}</Badge>:<span style={{color:C.textMuted}}>—</span>},
+                {key:"baseDepartment",label:"Department",render:r=>r.baseDepartment||<span style={{color:C.textMuted}}>—</span>},
+                {key:"baseCountry",label:"Country",render:r=>r.baseCountry||<span style={{color:C.textMuted}}>—</span>},
+                {key:"reportingManager",label:"Reporting Manager",render:r=>r.reportingManager||<span style={{color:C.textMuted}}>—</span>},
+                {key:"status",label:"Status",render:r=><Badge color={statusColor(r.status)} dot>{r.status}</Badge>},
+                {key:"actions",label:"",render:r=><Btn size="sm" variant="ghost" onClick={()=>{setSelected(r);setView("detail");}}>View →</Btn>},
+              ]} rows={filtered} emptyMsg="No employees match your search."/>
+            </Card>
+          )}
+        </>
+      )}
+
+      {view==="detail"&&selected&&(
+        <div>
+          <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:20}}>
+            <Btn variant="ghost" size="sm" onClick={()=>setView("list")}>← Back</Btn>
+            <div style={{flex:1}}>
+              <h2 style={{margin:0,fontSize:20,fontWeight:700}}>{selected.name}</h2>
+              {selected.email&&<div style={{fontSize:13,color:C.textSub}}>{selected.email}</div>}
+            </div>
+            <Badge color={statusColor(selected.status)} dot>{selected.status}</Badge>
+          </div>
+
           <div style={{display:"grid",gridTemplateColumns:"1fr 300px",gap:20}}>
             <Card>
-              <div style={{fontSize:20,fontWeight:700,marginBottom:4}}>{selected.name}</div>
-              <div style={{fontSize:13,color:C.textSub,marginBottom:16}}>{selected.type} · {selected.region} · {selected.country}</div>
-              <Tabs tabs={[{key:"overview",label:"Overview"},{key:"projects",label:"Projects"},{key:"invoices",label:"Invoices"}]} active="overview" onChange={()=>{}}/>
-              <Table cols={[
-                {key:"name",label:"Project"},
-                {key:"status",label:"Status",render:r=><Badge color={r.status==="Active"?"green":"amber"} dot>{r.status}</Badge>},
-                {key:"forecast",label:"Forecast",right:true,render:r=>fmtM(r.forecast)},
-                {key:"actual",label:"Actual YTD",right:true,render:r=>fmtM(r.actual)},
-              ]} rows={PROJECTS.filter(p=>p.customer===selected.name)}/>
-            </Card>
-            <Card>
-              <div style={{fontWeight:700,marginBottom:12}}>Account Summary</div>
-              <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                {[["Delivery Owner",selected.deliveryOwner],["Status",selected.status],["Type",selected.type],["Region",selected.region],["Projects",selected.projects],["Total Forecast",fmtM(selected.revenue)]].map(([l,v])=>(
-                  <div key={l} style={{display:"flex",justifyContent:"space-between",fontSize:13,paddingBottom:8,borderBottom:`1px solid ${C.border}`}}>
-                    <span style={{color:C.textSub}}>{l}</span><strong>{v}</strong>
+              <FormSection title="Employment Details">
+                {[
+                  ["Employee ID",<span style={{fontFamily:"monospace",fontSize:12}}>{selected.id}</span>],
+                  ["Status",<Badge color={statusColor(selected.status)} dot>{selected.status}</Badge>],
+                  ["Reporting Manager",selected.reportingManager||"—"],
+                  ["Base Country",selected.baseCountry||"—"],
+                  ["Base Division",selected.baseDivision?<Badge color="blue">{selected.baseDivision}</Badge>:"—"],
+                  ["Base Department",selected.baseDepartment||"—"],
+                  ["Created",selected.createdAt],
+                ].map(([l,v])=>(
+                  <div key={l} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:`1px solid ${C.border}`,fontSize:13}}>
+                    <span style={{color:C.textSub}}>{l}</span><span style={{fontWeight:600}}>{v}</span>
                   </div>
                 ))}
+              </FormSection>
+            </Card>
+
+            <Card>
+              <div style={{fontWeight:700,marginBottom:12}}>Tag Review Status</div>
+              <div style={{textAlign:"center",padding:"20px 0",color:C.textMuted,fontSize:13}}>
+                <div style={{fontSize:24,marginBottom:8}}>🔁</div>
+                <div>Monthly tag reviews managed in the Tag Reviews module.</div>
+                <div style={{marginTop:8,fontSize:11}}>Reviewer: {selected.reportingManager||"No manager assigned"}</div>
               </div>
             </Card>
           </div>
         </div>
       )}
-      <Modal open={showNew} onClose={()=>setShowNew(false)} title="New Customer">
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
-          <div style={{gridColumn:"1/-1"}}><Input label="Customer Name" required value={form.name} onChange={v=>setForm(p=>({...p,name:v}))} placeholder="e.g. Pfizer Inc."/></div>
-          <Select label="Customer Type" required value={form.type} onChange={v=>setForm(p=>({...p,type:v}))} options={TAGS.customerType.map(t=>({value:t,label:t}))}/>
-          <Select label="Region" required value={form.region} onChange={v=>setForm(p=>({...p,region:v}))} options={TAGS.region.map(r=>({value:r,label:r}))}/>
-          <Select label="Country" required value={form.country} onChange={v=>setForm(p=>({...p,country:v}))} options={TAGS.country.map(c=>({value:c,label:c}))}/>
-          <Select label="Status" value={form.status} onChange={v=>setForm(p=>({...p,status:v}))} options={["Active","Inactive"].map(s=>({value:s,label:s}))}/>
-        </div>
-        <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:20}}>
-          <Btn variant="ghost" onClick={()=>setShowNew(false)}>Cancel</Btn>
-          <Btn onClick={()=>{if(form.name){setCustomers(p=>[...p,{...form,id:"c"+Date.now(),revenue:0,projects:0,deliveryOwner:"—"}]);setShowNew(false);}}} disabled={!form.name}>Save Customer</Btn>
+
+      {/* New Employee Modal */}
+      <Modal open={showNew} onClose={()=>{setShowNew(false);setErrors({});}} title="New Employee" width={640}>
+        <FormSection title="Employee Details">
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+            <div style={{gridColumn:"span 2"}}>
+              <Input label="Full Name" required value={form.name} onChange={v=>setForm(p=>({...p,name:v}))} error={errors.name} placeholder="e.g. Alex Johnson"/>
+            </div>
+            <Input label="Email Address" type="email" value={form.email} onChange={v=>setForm(p=>({...p,email:v}))} error={errors.email} placeholder="e.g. alex.johnson@freyr.com"/>
+            <Select label="Employment Status" required value={form.status} onChange={v=>setForm(p=>({...p,status:v}))} options={EMP_STATUSES.map(s=>({value:s,label:s}))} error={errors.status}/>
+          </div>
+        </FormSection>
+
+        <FormSection title="Home Base (optional)">
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+            <Select label="Base Country" value={form.baseCountry} onChange={v=>setForm(p=>({...p,baseCountry:v}))} placeholder="Select country" options={countries.map(c=>({value:c,label:c}))}/>
+            <Select label="Base Division" value={form.baseDivision} onChange={v=>setForm(p=>({...p,baseDivision:v}))} placeholder="Select division" options={divisions.map(d=>({value:d,label:d}))}/>
+            <div style={{gridColumn:"span 2"}}>
+              <Select label="Base Department" value={form.baseDepartment} onChange={v=>setForm(p=>({...p,baseDepartment:v}))} placeholder="Select department" options={departments.map(d=>({value:d,label:d}))}/>
+            </div>
+          </div>
+        </FormSection>
+
+        <FormSection title="Reporting">
+          <Select label="Reporting Manager" value={form.reportingManager} onChange={v=>setForm(p=>({...p,reportingManager:v}))} placeholder="Select reporting manager (optional)"
+            options={activeUsers.map(u=>({value:u.name,label:`${u.name} (${u.role})`}))}
+            hint="The Reporting Manager will be assigned as reviewer for this employee's monthly tag reviews"/>
+        </FormSection>
+
+        <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+          <Btn variant="ghost" onClick={()=>{setShowNew(false);setErrors({});}}>Cancel</Btn>
+          <Btn onClick={save}>Save Employee</Btn>
         </div>
       </Modal>
     </div>
   );
 }
 
-// ─── CONTRACTS MODULE ──────────────────────────────────────────────────────
-function Contracts(){
-  const [contracts,setContracts]=useState(CONTRACTS);
-  const [selected,setSelected]=useState(null);
-  const [showNew,setShowNew]=useState(false);
-  const [form,setForm]=useState({customerId:"c1",customer:"Johnson & Johnson",ref:"",type:"MSA",value:"",currency:"USD",start:"",end:"",status:"Active"});
+// ═══════════════════════════════════════════════════════════════════════════
+// DASHBOARD (overview — empty state aware)
+// ═══════════════════════════════════════════════════════════════════════════
+function Dashboard({customers,contracts,onNav}){
+  const activeCustomers=customers.filter(c=>c.status==="Active").length;
+  const activeContracts=contracts.filter(c=>c.status==="Active").length;
+  const expiringContracts=contracts.filter(c=>{
+    if(!c.endDate||c.status!=="Active")return false;
+    const days=Math.ceil((new Date(c.endDate)-new Date())/(1000*60*60*24));
+    return days>=0&&days<=30;
+  }).length;
+
+  const isEmpty=customers.length===0&&contracts.length===0;
 
   return(
     <div>
-      <SectionHeader title="Contracts" sub={`${contracts.filter(c=>c.status==="Active").length} active contracts`}
-        action={<Btn size="sm" onClick={()=>setShowNew(true)}>+ New Contract</Btn>}/>
-      <Card style={{padding:0}}>
-        <Table cols={[
-          {key:"ref",label:"Contract Ref",render:r=><strong>{r.ref}</strong>},
-          {key:"customer",label:"Customer"},
-          {key:"type",label:"Type",render:r=><Badge color="blue">{r.type}</Badge>},
-          {key:"currency",label:"CCY"},
-          {key:"value",label:"Value",right:true,render:r=><strong>{r.currency} {fmtN(r.value)}</strong>},
-          {key:"end",label:"Expiry",render:r=><span style={{color:["SOW-PFZ-2025","MSA-GSK-2023"].includes(r.ref)?C.warning:r.status==="Expired"?C.danger:C.text}}>{r.end}</span>},
-          {key:"status",label:"Status",render:r=><Badge color={r.status==="Active"?"green":r.status==="Expired"?"red":"amber"} dot>{r.status}</Badge>},
-          {key:"actions",label:"",render:r=><Btn size="sm" variant="ghost" onClick={()=>setSelected(r)}>View</Btn>},
-        ]} rows={contracts}/>
-      </Card>
-      <Modal open={!!selected} onClose={()=>setSelected(null)} title={selected?.ref||""} width={560}>
-        {selected&&<div style={{display:"flex",flexDirection:"column",gap:10}}>
-          {[["Customer",selected.customer],["Type",selected.type],["Value",`${selected.currency} ${fmtN(selected.value)}`],["Period",`${selected.start} → ${selected.end}`],["Status",selected.status]].map(([l,v])=>(
-            <div key={l} style={{display:"flex",justifyContent:"space-between",fontSize:13,paddingBottom:8,borderBottom:`1px solid ${C.border}`}}>
-              <span style={{color:C.textSub}}>{l}</span><strong>{v}</strong>
+      <SectionHeader title="Platform Overview" sub="Freyr Pulse · Welcome"/>
+
+      {isEmpty&&(
+        <Card style={{marginBottom:20,background:"linear-gradient(135deg,#0C1F3D,#1a3a6b)",border:"none"}}>
+          <div style={{textAlign:"center",padding:"40px 20px"}}>
+            <div style={{fontSize:48,marginBottom:12}}>🚀</div>
+            <div style={{color:C.white,fontWeight:700,fontSize:20,marginBottom:8}}>Welcome to Freyr Pulse</div>
+            <div style={{color:"rgba(255,255,255,0.7)",fontSize:14,marginBottom:24,maxWidth:500,margin:"0 auto 24px"}}>
+              Get started by setting up your Tag Master, configuring Freyr entities in Settings, then adding your first customer.
             </div>
-          ))}
-          <div style={{fontWeight:700,marginTop:8}}>Linked Projects</div>
-          {PROJECTS.filter(p=>p.contractId===selected.id).map(p=>(
-            <div key={p.id} style={{display:"flex",justifyContent:"space-between",fontSize:13,padding:"6px 0",borderBottom:`1px solid ${C.border}`}}>
-              <span>{p.name}</span><Badge color={p.status==="Active"?"green":"amber"} dot>{p.status}</Badge>
+            <div style={{display:"flex",gap:12,justifyContent:"center",flexWrap:"wrap"}}>
+              <Btn onClick={()=>onNav("tags")} style={{background:C.white,color:C.primary}}>1. Configure Tags</Btn>
+              <Btn onClick={()=>onNav("settings")} style={{background:"rgba(255,255,255,0.15)",color:C.white,border:"1px solid rgba(255,255,255,0.3)"}}>2. Set Up Entities</Btn>
+              <Btn onClick={()=>onNav("customers")} style={{background:"rgba(255,255,255,0.15)",color:C.white,border:"1px solid rgba(255,255,255,0.3)"}}>3. Add Customers</Btn>
             </div>
-          ))}
-        </div>}
-      </Modal>
-      <Modal open={showNew} onClose={()=>setShowNew(false)} title="New Contract">
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
-          <Select label="Customer" required value={form.customerId} onChange={v=>{const c=CUSTOMERS.find(c=>c.id===v);setForm(p=>({...p,customerId:v,customer:c?.name||""}));}} options={CUSTOMERS.map(c=>({value:c.id,label:c.name}))}/>
-          <Input label="Contract Reference" required value={form.ref} onChange={v=>setForm(p=>({...p,ref:v}))} placeholder="e.g. MSA-ABC-2026"/>
-          <Select label="Contract Type" value={form.type} onChange={v=>setForm(p=>({...p,type:v}))} options={["MSA","SOW","NDA","Framework"].map(t=>({value:t,label:t}))}/>
-          <Select label="Currency" value={form.currency} onChange={v=>setForm(p=>({...p,currency:v}))} options={CURRENCIES.map(c=>({value:c,label:c}))}/>
-          <Input label="Contract Value" type="number" value={form.value} onChange={v=>setForm(p=>({...p,value:v}))} placeholder="Optional ceiling value"/>
-          <Select label="Status" value={form.status} onChange={v=>setForm(p=>({...p,status:v}))} options={["Active","Expired"].map(s=>({value:s,label:s}))}/>
-          <Input label="Start Date" required type="date" value={form.start} onChange={v=>setForm(p=>({...p,start:v}))}/>
-          <Input label="End Date" type="date" value={form.end} onChange={v=>setForm(p=>({...p,end:v}))}/>
-        </div>
-        <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:20}}>
-          <Btn variant="ghost" onClick={()=>setShowNew(false)}>Cancel</Btn>
-          <Btn onClick={()=>{if(form.ref&&form.customerId){setContracts(p=>[...p,{...form,id:"k"+Date.now(),value:parseFloat(form.value)||0}]);setShowNew(false);}}} disabled={!form.ref}>Save Contract</Btn>
-        </div>
-      </Modal>
-    </div>
-  );
-}
-
-// ─── PROJECTS MODULE ───────────────────────────────────────────────────────
-function Projects(){
-  const [projects,setProjects]=useState(PROJECTS);
-  const [selected,setSelected]=useState(null);
-  const [showNew,setShowNew]=useState(false);
-  const [search,setSearch]=useState("");
-  const [form,setForm]=useState({contractId:"k1",customer:"Johnson & Johnson",name:"",division:"Regulatory Affairs",dept:"Global RA",status:"Active",deliveryOwner:"Jane Smith",start:"",end:""});
-
-  const divColors={"Regulatory Affairs":C.primary,"Clinical Writing":C.success,"Publishing":C.warning,"PV & Safety":C.purple};
-  const filtered=projects.filter(p=>p.name.toLowerCase().includes(search.toLowerCase())||p.customer.toLowerCase().includes(search.toLowerCase()));
-
-  return(
-    <div>
-      <SectionHeader title="Projects" sub={`${projects.filter(p=>p.status==="Active").length} active projects`}
-        action={<Btn size="sm" onClick={()=>setShowNew(true)}>+ New Project</Btn>}/>
-      <Card style={{padding:0}}>
-        <div style={{padding:"14px 20px",borderBottom:`1px solid ${C.border}`}}>
-          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search projects or customers..." style={{width:"100%",border:`1.5px solid ${C.border}`,borderRadius:6,padding:"7px 11px",fontSize:13,outline:"none"}}/>
-        </div>
-        <Table cols={[
-          {key:"name",label:"Project",render:r=><div><div style={{fontWeight:600}}>{r.name}</div><div style={{fontSize:11,color:C.textMuted}}>{r.customer}</div></div>},
-          {key:"division",label:"Division",render:r=><Badge color={r.division==="Regulatory Affairs"?"blue":r.division==="Clinical Writing"?"green":r.division==="Publishing"?"amber":"purple"}>{r.division}</Badge>},
-          {key:"deliveryOwner",label:"Delivery Owner"},
-          {key:"status",label:"Status",render:r=><Badge color={r.status==="Active"?"green":r.status==="On Hold"?"amber":"gray"} dot>{r.status}</Badge>},
-          {key:"forecast",label:"Forecast",right:true,render:r=>fmtM(toUSD(r.forecast,CONTRACTS.find(k=>k.id===r.contractId)?.currency||"USD"))},
-          {key:"actual",label:"Actual YTD",right:true,render:r=>fmtM(toUSD(r.actual,CONTRACTS.find(k=>k.id===r.contractId)?.currency||"USD"))},
-          {key:"real",label:"Real.",right:true,render:r=>{const rl=r.actual/r.forecast*100;return<Badge color={rl>=92?"green":rl>=80?"amber":"red"}>{pct(rl)}</Badge>;}},
-          {key:"actions",label:"",render:r=><Btn size="sm" variant="ghost" onClick={()=>setSelected(r)}>View</Btn>},
-        ]} rows={filtered}/>
-      </Card>
-      <Modal open={!!selected} onClose={()=>setSelected(null)} title={selected?.name||""} width={680}>
-        {selected&&<div>
-          <div style={{display:"flex",gap:12,flexWrap:"wrap",marginBottom:16}}>
-            <Badge color="blue">{selected.division}</Badge>
-            <Badge color={selected.status==="Active"?"green":"amber"} dot>{selected.status}</Badge>
-            <span style={{fontSize:13,color:C.textSub}}>DO: <strong>{selected.deliveryOwner}</strong></span>
-            <span style={{fontSize:13,color:C.textSub}}>Customer: <strong>{selected.customer}</strong></span>
           </div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:16}}>
-            <KpiCard label="Forecast" value={fmtM(toUSD(selected.forecast,CONTRACTS.find(k=>k.id===selected.contractId)?.currency||"USD"))} sub="USD equivalent" accent={C.primary}/>
-            <KpiCard label="Actual YTD" value={fmtM(toUSD(selected.actual,CONTRACTS.find(k=>k.id===selected.contractId)?.currency||"USD"))} sub="Jan–Mar 2026" accent={C.success}/>
-          </div>
-          <div style={{fontWeight:700,marginBottom:8}}>Service Lines</div>
-          <Table cols={[
-            {key:"name",label:"Service Line"},
-            {key:"commercialType",label:"Type",render:r=><Badge color="blue">{r.commercialType}</Badge>},
-            {key:"division",label:"Division"},
-            {key:"currency",label:"CCY"},
-          ]} rows={SERVICE_LINES_LIST.filter(s=>s.projectId===selected.id)}/>
-        </div>}
-      </Modal>
-      <Modal open={showNew} onClose={()=>setShowNew(false)} title="New Project">
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
-          <div style={{gridColumn:"1/-1"}}><Input label="Project Name" required value={form.name} onChange={v=>setForm(p=>({...p,name:v}))} placeholder="e.g. AZ Global RA Support"/></div>
-          <Select label="Contract" required value={form.contractId} onChange={v=>{const c=CONTRACTS.find(c=>c.id===v);setForm(p=>({...p,contractId:v,customer:c?.customer||""}));}} options={CONTRACTS.map(c=>({value:c.id,label:`${c.ref} — ${c.customer}`}))}/>
-          <Select label="Division" required value={form.division} onChange={v=>setForm(p=>({...p,division:v}))} options={DIVISIONS.map(d=>({value:d,label:d}))}/>
-          <Select label="Department" required value={form.dept} onChange={v=>setForm(p=>({...p,dept:v}))} options={DEPARTMENTS.map(d=>({value:d,label:d}))}/>
-          <Select label="Delivery Owner" required value={form.deliveryOwner} onChange={v=>setForm(p=>({...p,deliveryOwner:v}))} options={USERS.filter(u=>u.role==="Delivery Owner").map(u=>({value:u.name,label:u.name}))}/>
-          <Input label="Start Date" type="date" value={form.start} onChange={v=>setForm(p=>({...p,start:v}))}/>
-          <Input label="End Date" type="date" value={form.end} onChange={v=>setForm(p=>({...p,end:v}))}/>
-          <Select label="Status" value={form.status} onChange={v=>setForm(p=>({...p,status:v}))} options={["Active","On Hold","Closed"].map(s=>({value:s,label:s}))}/>
-        </div>
-        <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:20}}>
-          <Btn variant="ghost" onClick={()=>setShowNew(false)}>Cancel</Btn>
-          <Btn onClick={()=>{if(form.name){setProjects(p=>[...p,{...form,id:"p"+Date.now(),forecast:0,actual:0}]);setShowNew(false);}}} disabled={!form.name}>Save Project</Btn>
-        </div>
-      </Modal>
-    </div>
-  );
-}
-
-// ─── SERVICE LINES MODULE ──────────────────────────────────────────────────
-function ServiceLines(){
-  const [sls,setSls]=useState(SERVICE_LINES_LIST);
-  const [showNew,setShowNew]=useState(false);
-  const [selected,setSelected]=useState(null);
-  const [form,setForm]=useState({name:"",projectId:"p1",project:"J&J RA Global Support",customer:"Johnson & Johnson",commercialType:"T&M Managed",division:"Regulatory Affairs",dept:"Global RA",currency:"USD",deliveryOwner:"Jane Smith"});
-
-  return(
-    <div>
-      <SectionHeader title="Service Lines" sub={`${sls.length} service lines across ${PROJECTS.length} projects`}
-        action={<Btn size="sm" onClick={()=>setShowNew(true)}>+ New Service Line</Btn>}/>
-      <Card style={{padding:0}}>
-        <Table cols={[
-          {key:"name",label:"Service Line",render:r=><div><div style={{fontWeight:600}}>{r.name}</div><div style={{fontSize:11,color:C.textMuted}}>{r.project}</div></div>},
-          {key:"customer",label:"Customer"},
-          {key:"commercialType",label:"Commercial Type",render:r=><Badge color={r.commercialType.includes("T&M")?"blue":r.commercialType==="Fixed Price"?"green":r.commercialType==="Unit-Based"?"amber":"purple"}>{r.commercialType}</Badge>},
-          {key:"division",label:"Division"},
-          {key:"currency",label:"CCY"},
-          {key:"deliveryOwner",label:"Delivery Owner"},
-          {key:"actions",label:"",render:r=><Btn size="sm" variant="ghost" onClick={()=>setSelected(r)}>View</Btn>},
-        ]} rows={sls}/>
-      </Card>
-      <Modal open={!!selected} onClose={()=>setSelected(null)} title={selected?.name||""} width={560}>
-        {selected&&<div style={{display:"flex",flexDirection:"column",gap:10}}>
-          {[["Project",selected.project],["Customer",selected.customer],["Commercial Type",selected.commercialType],["Division",selected.division],["Department",selected.dept],["Currency",selected.currency],["Delivery Owner",selected.deliveryOwner]].map(([l,v])=>(
-            <div key={l} style={{display:"flex",justifyContent:"space-between",fontSize:13,paddingBottom:8,borderBottom:`1px solid ${C.border}`}}>
-              <span style={{color:C.textSub}}>{l}</span><strong>{v}</strong>
-            </div>
-          ))}
-        </div>}
-      </Modal>
-      <Modal open={showNew} onClose={()=>setShowNew(false)} title="New Service Line">
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
-          <div style={{gridColumn:"1/-1"}}><Input label="Service Line Name" required value={form.name} onChange={v=>setForm(p=>({...p,name:v}))} placeholder="e.g. HA Query Support"/></div>
-          <Select label="Project" required value={form.projectId} onChange={v=>{const pr=PROJECTS.find(p=>p.id===v);setForm(p=>({...p,projectId:v,project:pr?.name||"",customer:pr?.customer||""}));}} options={PROJECTS.map(p=>({value:p.id,label:p.name}))}/>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,gridColumn:"1/-1"}}>
-            {["Fixed Price","T&M Staffing","T&M Managed","Unit-Based","Recurring"].map(ct=>(
-              <button key={ct} onClick={()=>setForm(p=>({...p,commercialType:ct}))} style={{padding:"10px 8px",borderRadius:8,border:`2px solid ${form.commercialType===ct?C.primary:C.border}`,background:form.commercialType===ct?C.primaryLight:C.white,cursor:"pointer",fontSize:12,fontWeight:600,color:form.commercialType===ct?C.primary:C.textSub}}>{ct}</button>
-            ))}
-          </div>
-          <Select label="Division" required value={form.division} onChange={v=>setForm(p=>({...p,division:v}))} options={DIVISIONS.map(d=>({value:d,label:d}))}/>
-          <Select label="Department" required value={form.dept} onChange={v=>setForm(p=>({...p,dept:v}))} options={DEPARTMENTS.map(d=>({value:d,label:d}))}/>
-          <Select label="Currency" required value={form.currency} onChange={v=>setForm(p=>({...p,currency:v}))} options={CURRENCIES.map(c=>({value:c,label:c}))}/>
-          <Select label="Delivery Owner" required value={form.deliveryOwner} onChange={v=>setForm(p=>({...p,deliveryOwner:v}))} options={USERS.filter(u=>u.role==="Delivery Owner").map(u=>({value:u.name,label:u.name}))}/>
-        </div>
-        <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:20}}>
-          <Btn variant="ghost" onClick={()=>setShowNew(false)}>Cancel</Btn>
-          <Btn onClick={()=>{if(form.name){setSls(p=>[...p,{...form,id:"sl"+Date.now()}]);setShowNew(false);}}} disabled={!form.name}>Save Service Line</Btn>
-        </div>
-      </Modal>
-    </div>
-  );
-}
-
-// ─── INVOICES MODULE ───────────────────────────────────────────────────────
-function Invoices(){
-  const [invoices,setInvoices]=useState(INVOICES);
-  const [selected,setSelected]=useState(null);
-  const [showNew,setShowNew]=useState(false);
-  const [form,setForm]=useState({customer:"Johnson & Johnson",project:"J&J RA Global Support",amount:"",currency:"USD",due:"",notes:""});
-
-  const statusColor=s=>s==="Paid"?"green":s==="Outstanding"?"blue":s==="Overdue"?"red":"gray";
-
-  return(
-    <div>
-      <SectionHeader title="Invoices" sub="Invoice tracking and Odoo sync status"
-        action={<Btn size="sm" onClick={()=>setShowNew(true)}>+ New Invoice</Btn>}/>
-      <div style={{display:"flex",gap:16,marginBottom:24,flexWrap:"wrap"}}>
-        <KpiCard label="Total Invoiced" value={fmtM(invoiceTotalUSD())} sub="All invoices · USD" accent={C.primary}/>
-        <KpiCard label="Collected" value={fmtM(invoicePaidUSD())} sub="Paid invoices" accent={C.success}/>
-        <KpiCard label="Outstanding" value={fmtM(invoiceOutstandingUSD())} sub="Unpaid (incl. overdue)" accent={C.warning}/>
-        <KpiCard label="Sync Failures" value={invoices.filter(i=>i.odooSync==="Failed").length} sub="Odoo sync errors" accent={C.danger}/>
-      </div>
-      <Card style={{padding:0}}>
-        <Table cols={[
-          {key:"number",label:"Invoice No.",render:r=><strong>{r.number}</strong>},
-          {key:"customer",label:"Customer"},
-          {key:"serviceLine",label:"Service Line"},
-          {key:"amount",label:"Amount",right:true,render:r=><strong>{r.currency} {fmtN(r.amount)}</strong>},
-          {key:"due",label:"Due",render:r=><span style={{color:r.status==="Overdue"?C.danger:C.text}}>{r.due}</span>},
-          {key:"status",label:"Status",render:r=><Badge color={statusColor(r.status)} dot>{r.status}</Badge>},
-          {key:"odooSync",label:"Odoo",render:r=><Badge color={r.odooSync==="Synced"?"green":"red"}>{r.odooSync}</Badge>},
-          {key:"actions",label:"",render:r=><Btn size="sm" variant="ghost" onClick={()=>setSelected(r)}>View</Btn>},
-        ]} rows={invoices}/>
-      </Card>
-      <Modal open={!!selected} onClose={()=>setSelected(null)} title={selected?.number||""} width={560}>
-        {selected&&<div>
-          <div style={{display:"flex",gap:8,marginBottom:16}}>
-            <Badge color={statusColor(selected.status)} dot>{selected.status}</Badge>
-            <Badge color={selected.odooSync==="Synced"?"green":"red"}>{selected.odooSync}</Badge>
-          </div>
-          {selected.odooSync==="Failed"&&<Alert type="danger">Odoo sync failed. Automatic retry exhausted. Click Retry to attempt again.</Alert>}
-          {[["Customer",selected.customer],["Project",selected.project],["Service Line",selected.serviceLine],["Amount",`${selected.currency} ${fmtN(selected.amount)}`],["Issued",selected.issued],["Due",selected.due],["Paid",selected.paid||"—"]].map(([l,v])=>(
-            <div key={l} style={{display:"flex",justifyContent:"space-between",fontSize:13,paddingBottom:8,borderBottom:`1px solid ${C.border}`}}>
-              <span style={{color:C.textSub}}>{l}</span><strong>{v}</strong>
-            </div>
-          ))}
-          <div style={{display:"flex",gap:8,marginTop:16}}>
-            {selected.odooSync==="Failed"&&<Btn size="sm">Retry Sync</Btn>}
-            {selected.status!=="Paid"&&<Btn size="sm" variant="success">Mark Paid</Btn>}
-          </div>
-        </div>}
-      </Modal>
-      <Modal open={showNew} onClose={()=>setShowNew(false)} title="New Invoice">
-        <Alert type="info">Invoice number will be auto-generated in format FRUS2026XXXX on submission.</Alert>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
-          <Select label="Customer" required value={form.customer} onChange={v=>setForm(p=>({...p,customer:v}))} options={CUSTOMERS.map(c=>({value:c.name,label:c.name}))}/>
-          <Select label="Project" required value={form.project} onChange={v=>setForm(p=>({...p,project:v}))} options={PROJECTS.map(p=>({value:p.name,label:p.name}))}/>
-          <Input label="Amount" required type="number" value={form.amount} onChange={v=>setForm(p=>({...p,amount:v}))} placeholder="e.g. 50000"/>
-          <Select label="Currency" value={form.currency} onChange={v=>setForm(p=>({...p,currency:v}))} options={CURRENCIES.map(c=>({value:c,label:c}))}/>
-          <Input label="Due Date" required type="date" value={form.due} onChange={v=>setForm(p=>({...p,due:v}))}/>
-        </div>
-        <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:20}}>
-          <Btn variant="ghost" onClick={()=>setShowNew(false)}>Cancel</Btn>
-          <Btn onClick={()=>{if(form.amount&&form.customer){setInvoices(p=>[...p,{...form,id:"i"+Date.now(),number:`FRUS2026${1835+p.length}`,amount:parseFloat(form.amount),status:"Outstanding",issued:new Date().toISOString().slice(0,10),paid:null,odooSync:"Pending"}]);setShowNew(false);}}} disabled={!form.amount}>Submit Invoice</Btn>
-        </div>
-      </Modal>
-    </div>
-  );
-}
-
-// ─── TAG MASTER ────────────────────────────────────────────────────────────
-function TagMaster(){
-  const [activeCategory,setActiveCategory]=useState("division");
-  const [customTags,setCustomTags]=useState(TAGS);
-  const [showNew,setShowNew]=useState(false);
-  const [newTag,setNewTag]=useState("");
-  const cats=Object.keys(customTags);
-  const catLabels={division:"Division",department:"Department",country:"Country",region:"Region",customerType:"Customer Type",accountType:"Account Type"};
-
-  return(
-    <div>
-      <SectionHeader title="Tag Master" sub="Manage tag categories and values for classification and reporting"/>
-      <div style={{display:"grid",gridTemplateColumns:"220px 1fr",gap:20}}>
-        <Card style={{padding:0}}>
-          {cats.map(cat=>(
-            <div key={cat} onClick={()=>setActiveCategory(cat)} style={{padding:"11px 16px",cursor:"pointer",background:activeCategory===cat?C.primaryLight:"transparent",borderLeft:activeCategory===cat?`3px solid ${C.primary}`:"3px solid transparent",fontSize:13,fontWeight:activeCategory===cat?700:400,color:activeCategory===cat?C.primary:C.text}}>
-              {catLabels[cat]||cat}
-              <span style={{marginLeft:8,background:C.bg,borderRadius:10,padding:"1px 7px",fontSize:11,color:C.textSub}}>{customTags[cat].length}</span>
-            </div>
-          ))}
         </Card>
+      )}
+
+      <div style={{display:"flex",gap:16,marginBottom:24,flexWrap:"wrap"}}>
+        <KpiCard label="Active Customers" value={activeCustomers} sub="Registered accounts" accent={C.primary} badge={activeCustomers===0?<Badge color="gray">None yet</Badge>:null}/>
+        <KpiCard label="Active Contracts" value={activeContracts} sub="Across all customers" accent={C.success} badge={activeContracts===0?<Badge color="gray">None yet</Badge>:null}/>
+        <KpiCard label="Expiring Soon" value={expiringContracts} sub="Within 30 days" accent={expiringContracts>0?C.warning:C.success} badge={expiringContracts>0?<Badge color="amber" dot>Action needed</Badge>:null}/>
+        <KpiCard label="Total Contracts" value={contracts.length} sub="All statuses" accent={C.primary}/>
+      </div>
+
+      {expiringContracts>0&&(
+        <Alert type="warning">{expiringContracts} contract{expiringContracts>1?"s":""} expiring within 30 days. <button onClick={()=>onNav("contracts")} style={{background:"none",border:"none",color:C.warning,cursor:"pointer",fontWeight:700,textDecoration:"underline"}}>View contracts →</button></Alert>
+      )}
+
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20}}>
         <Card>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-            <div style={{fontWeight:700,fontSize:15}}>{catLabels[activeCategory]||activeCategory} Tags</div>
-            <Btn size="sm" onClick={()=>setShowNew(true)}>+ New Tag</Btn>
-          </div>
-          <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
-            {customTags[activeCategory].map((tag,i)=>(
-              <div key={i} style={{display:"flex",alignItems:"center",gap:6,background:C.primaryLight,color:C.primary,padding:"5px 12px",borderRadius:20,fontSize:13,fontWeight:600}}>
-                {tag}
-                <button onClick={()=>setCustomTags(p=>({...p,[activeCategory]:p[activeCategory].filter(t=>t!==tag)}))} style={{background:"none",border:"none",cursor:"pointer",color:C.primary,fontSize:14,lineHeight:1}}>×</button>
-              </div>
-            ))}
-          </div>
+          <div style={{fontWeight:700,marginBottom:12}}>Recent Customers</div>
+          {customers.length===0?(
+            <div style={{textAlign:"center",padding:"30px 0",color:C.textMuted,fontSize:13}}>
+              No customers yet. <button onClick={()=>onNav("customers")} style={{background:"none",border:"none",color:C.primary,cursor:"pointer",fontWeight:600}}>Add first customer →</button>
+            </div>
+          ):(
+            <Table cols={[
+              {key:"name",label:"Customer",render:r=><strong>{r.name}</strong>},
+              {key:"customerType",label:"Type",render:r=><Badge color="blue">{r.customerType}</Badge>},
+              {key:"status",label:"Status",render:r=><Badge color={r.status==="Active"?"green":"gray"} dot>{r.status}</Badge>},
+            ]} rows={[...customers].reverse().slice(0,5)}/>
+          )}
+        </Card>
+
+        <Card>
+          <div style={{fontWeight:700,marginBottom:12}}>Recent Contracts</div>
+          {contracts.length===0?(
+            <div style={{textAlign:"center",padding:"30px 0",color:C.textMuted,fontSize:13}}>
+              No contracts yet. <button onClick={()=>onNav("contracts")} style={{background:"none",border:"none",color:C.primary,cursor:"pointer",fontWeight:600}}>Add first contract →</button>
+            </div>
+          ):(
+            <Table cols={[
+              {key:"contractName",label:"Contract",render:r=><div><div style={{fontWeight:600,fontSize:12}}>{r.contractName}</div><div style={{fontSize:11,color:C.textMuted}}>{r.customerName}</div></div>},
+              {key:"currency",label:"CCY"},
+              {key:"status",label:"Status",render:r=><Badge color={r.status==="Active"?"green":r.status==="Draft"?"blue":"gray"} dot>{r.status}</Badge>},
+            ]} rows={[...contracts].reverse().slice(0,5)}/>
+          )}
         </Card>
       </div>
-      <Modal open={showNew} onClose={()=>setShowNew(false)} title={`Add ${catLabels[activeCategory]||activeCategory} Tag`} width={400}>
-        <Input label="Tag Value" required value={newTag} onChange={setNewTag} placeholder="Enter tag value"/>
-        <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:20}}>
-          <Btn variant="ghost" onClick={()=>setShowNew(false)}>Cancel</Btn>
-          <Btn onClick={()=>{if(newTag){setCustomTags(p=>({...p,[activeCategory]:[...p[activeCategory],newTag]}));setNewTag("");setShowNew(false);}}} disabled={!newTag}>Add Tag</Btn>
-        </div>
-      </Modal>
     </div>
   );
 }
 
-// ─── RATE CARD ─────────────────────────────────────────────────────────────
-function RateCard(){
-  const [tab,setTab]=useState("standard");
-  const [rates,setRates]=useState(initRates);
-  const [overrides]=useState(initOverrides);
-  const [alerts,setAlerts]=useState(initAlerts);
-  const [showAddRate,setShowAddRate]=useState(false);
-  const [showHistory,setShowHistory]=useState(false);
-  const [historyRate,setHistoryRate]=useState(null);
-  const [filterStatus,setFilterStatus]=useState("Active");
-  const [form,setForm]=useState({role:"",grade:"",location:"",currency:"USD",unit:"Hour",rate:"",effectiveFrom:"2026-01-01",effectiveTo:"",status:"Active"});
-  const activeRates=rates.filter(r=>filterStatus==="All"?true:r.status===filterStatus);
-  const pendingAlerts=alerts.filter(a=>a.status==="Pending").length;
-  const deviationBadge=d=>{const a=Math.abs(d);return a>15?"red":a>5?"amber":"gray";};
+// ═══════════════════════════════════════════════════════════════════════════
+// PLACEHOLDER for Session B/C modules
+// ═══════════════════════════════════════════════════════════════════════════
+function Placeholder({name,icon="🔧",note}){
   return(
     <div>
-      <SectionHeader title="Rate Card Master" sub="Standard rates, project overrides, and rate update alerts"
-        action={<div style={{display:"flex",gap:8}}><Btn variant="secondary" size="sm" onClick={()=>setShowHistory(true)}>📜 Rate History</Btn><Btn size="sm" onClick={()=>setShowAddRate(true)}>+ New Rate</Btn></div>}/>
-      <div style={{display:"flex",gap:16,marginBottom:24,flexWrap:"wrap"}}>
-        <KpiCard label="Active Standard Rates" value={rates.filter(r=>r.status==="Active").length} sub="Across all roles & locations" accent={C.primary}/>
-        <KpiCard label="Project Overrides" value={overrides.length} sub="Negotiated deviations" accent={C.warning}/>
-        <KpiCard label="Pending Rate Alerts" value={pendingAlerts} sub="Awaiting DO acknowledgement" accent={C.danger} badge={pendingAlerts>0?<Badge color="red" dot>Action needed</Badge>:null}/>
-        <KpiCard label="Rate Revisions (2026)" value={4} sub="Last revision: Jan 2026" accent={C.success}/>
-      </div>
-      <Tabs tabs={[{key:"standard",label:"Standard Rates"},{key:"overrides",label:"Project Overrides"},{key:"alerts",label:"Rate Alerts",count:pendingAlerts}]} active={tab} onChange={setTab}/>
-      {tab==="standard"&&<Card>
-        <div style={{display:"flex",gap:12,marginBottom:16,alignItems:"center"}}>
-          <Select value={filterStatus} onChange={setFilterStatus} options={["Active","Retired","All"]} style={{width:140}}/>
-          <div style={{flex:1}}/><span style={{fontSize:12,color:C.textMuted}}>{activeRates.length} rates shown</span>
-        </div>
-        <Table cols={[
-          {key:"role",label:"Role"},{key:"grade",label:"Grade"},{key:"location",label:"Location"},{key:"currency",label:"Currency"},{key:"unit",label:"Unit"},
-          {key:"rate",label:"Rate",right:true,render:r=><strong>{r.currency} {fmtN(r.rate)}/{r.unit}</strong>},
-          {key:"effectiveFrom",label:"Effective From"},{key:"effectiveTo",label:"To",render:r=>r.effectiveTo||<span style={{color:C.textMuted}}>Open</span>},
-          {key:"status",label:"Status",render:r=><Badge color={r.status==="Active"?"green":"gray"}>{r.status}</Badge>},
-          {key:"actions",label:"",render:r=><div style={{display:"flex",gap:6}}><Btn variant="ghost" size="sm">Edit</Btn><Btn variant="ghost" size="sm" onClick={()=>{setHistoryRate(r);setShowHistory(true);}}>History</Btn></div>},
-        ]} rows={activeRates}/>
-      </Card>}
-      {tab==="overrides"&&<Card>
-        <Alert type="info">Project overrides represent negotiated deviations from the standard rate card. Deviations &gt;15% are flagged.</Alert>
-        <Table cols={[
-          {key:"serviceLine",label:"Service Line"},{key:"customer",label:"Customer"},{key:"role",label:"Role"},
-          {key:"stdRate",label:"Std Rate",right:true,render:r=><span style={{color:C.textMuted}}>{r.currency} {fmtN(r.stdRate)}/{r.unit}</span>},
-          {key:"overrideRate",label:"Override",right:true,render:r=><strong>{r.currency} {fmtN(r.overrideRate)}/{r.unit}</strong>},
-          {key:"deviation",label:"Deviation",right:true,render:r=><Badge color={deviationBadge(r.deviation)}>{r.deviation>0?"+":""}{r.deviation.toFixed(1)}%</Badge>},
-          {key:"reason",label:"Reason",render:r=><span style={{fontSize:12,color:C.textSub}}>{r.reason}</span>},
-        ]} rows={overrides}/>
-      </Card>}
-      {tab==="alerts"&&<Card>
-        <Alert type="warning">{pendingAlerts} service lines pending review after January 2026 rate revision.</Alert>
-        <div style={{marginBottom:16}}><Btn variant="secondary" size="sm">Send All Reminders</Btn></div>
-        <Table cols={[
-          {key:"serviceLine",label:"Service Line"},{key:"deliveryOwner",label:"Delivery Owner"},{key:"role",label:"Role"},
-          {key:"oldRate",label:"Previous",right:true,render:r=><span style={{color:C.textMuted}}>{r.currency} {fmtN(r.oldRate)}</span>},
-          {key:"newRate",label:"New Rate",right:true,render:r=><strong style={{color:C.primary}}>{r.currency} {fmtN(r.newRate)}</strong>},
-          {key:"status",label:"Status",render:r=><Badge color={r.status==="Acknowledged"?"green":"red"} dot>{r.status}</Badge>},
-          {key:"actions",label:"",render:r=>r.status==="Pending"?<div style={{display:"flex",gap:6}}><Btn size="sm" onClick={()=>setAlerts(p=>p.map(a=>a.id===r.id?{...a,status:"Acknowledged"}:a))}>Apply</Btn><Btn variant="ghost" size="sm">Nudge</Btn></div>:<span style={{fontSize:12,color:C.success}}>✓</span>},
-        ]} rows={alerts}/>
-      </Card>}
-      <Modal open={showAddRate} onClose={()=>setShowAddRate(false)} title="Add Standard Rate">
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
-          <Select label="Role" required value={form.role} onChange={v=>setForm(p=>({...p,role:v}))} options={ROLES.map(r=>({value:r,label:r}))} placeholder="Select role"/>
-          <Select label="Grade" required value={form.grade} onChange={v=>setForm(p=>({...p,grade:v}))} options={GRADES.map(g=>({value:g,label:g}))} placeholder="Select grade"/>
-          <Select label="Location" required value={form.location} onChange={v=>setForm(p=>({...p,location:v}))} options={LOCATIONS.map(l=>({value:l,label:l}))} placeholder="Select location"/>
-          <Select label="Currency" required value={form.currency} onChange={v=>setForm(p=>({...p,currency:v}))} options={CURRENCIES.map(c=>({value:c,label:c}))}/>
-          <Select label="Unit" required value={form.unit} onChange={v=>setForm(p=>({...p,unit:v}))} options={["Hour","Day","Page","Word","Module","Unit"].map(u=>({value:u,label:u}))}/>
-          <Input label="Rate" required type="number" value={form.rate} onChange={v=>setForm(p=>({...p,rate:v}))} placeholder="e.g. 185" hint={form.rate?`${form.currency} ${fmtN(parseFloat(form.rate)||0)} / ${form.unit}`:""}/>
-          <Input label="Effective From" required type="date" value={form.effectiveFrom} onChange={v=>setForm(p=>({...p,effectiveFrom:v}))}/>
-          <Input label="Effective To" type="date" value={form.effectiveTo} onChange={v=>setForm(p=>({...p,effectiveTo:v}))}/>
-        </div>
-        <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:20}}>
-          <Btn variant="ghost" onClick={()=>setShowAddRate(false)}>Cancel</Btn>
-          <Btn onClick={()=>{if(form.role&&form.grade&&form.location&&form.rate){setRates(p=>[...p,{...form,id:"r"+Date.now(),rate:parseFloat(form.rate)}]);setShowAddRate(false);}}} disabled={!form.role||!form.rate}>Save Rate</Btn>
-        </div>
-      </Modal>
-      <Modal open={showHistory} onClose={()=>{setShowHistory(false);setHistoryRate(null);}} title={historyRate?`Rate History — ${historyRate.role}`:"Audit Log"} width={700}>
-        <Alert type="info">Rate history is immutable and cannot be edited or deleted.</Alert>
-        <Table cols={[
-          {key:"event",label:"Event",render:(_,i)=>i===0?"Rate Updated":"Rate Created"},
-          {key:"role",label:"Role",render:()=>historyRate?.role||"Various"},
-          {key:"old",label:"Previous",render:(r,i)=>i===0?`${historyRate?.currency||"USD"} ${fmtN((historyRate?.rate||185)*0.943)}`:"—"},
-          {key:"new",label:"New",render:()=><strong>{historyRate?.currency||"USD"} {fmtN(historyRate?.rate||185)}</strong>},
-          {key:"by",label:"By",render:()=>"Admin"},
-          {key:"at",label:"Date",render:(_,i)=>i===0?"2026-01-02":"2025-01-05"},
-        ]} rows={historyRate?[historyRate,historyRate]:rates.slice(0,3)}/>
-      </Modal>
-    </div>
-  );
-}
-
-// ─── FX RATES ──────────────────────────────────────────────────────────────
-function FxRates(){
-  const [tab,setTab]=useState("current");
-  const [fxRates,setFxRates]=useState(initFxRates);
-  const [showAdd,setShowAdd]=useState(false);
-  const [addForm,setAddForm]=useState({pair:"GBP/USD",from:"GBP",to:"USD",month:"Apr 2026",rate:""});
-  const currentMonth="Apr 2026";
-  const getRateForMonth=(pair,month)=>fxRates.find(r=>r.pair===pair&&r.month===month);
-  const missingCurrent=FX_PAIRS.filter(p=>!getRateForMonth(p,currentMonth));
-  const handleAddRates=()=>{
-    if(!addForm.rate)return;
-    const existing=fxRates.find(r=>r.pair===addForm.pair&&r.month===addForm.month);
-    if(existing){setFxRates(p=>p.map(r=>r.pair===addForm.pair&&r.month===addForm.month?{...r,rate:parseFloat(addForm.rate),enteredAt:"2026-04-09"}:r));}
-    else{setFxRates(p=>[...p,{id:"fx"+Date.now(),...addForm,rate:parseFloat(addForm.rate),enteredBy:"Admin",enteredAt:"2026-04-09"}]);}
-    setShowAdd(false);
-  };
-  return(
-    <div>
-      <SectionHeader title="FX Rate Master" sub="Monthly average exchange rates for USD reporting conversion" action={<Btn size="sm" onClick={()=>setShowAdd(true)}>+ Add Rates</Btn>}/>
-      <div style={{display:"flex",gap:16,marginBottom:24,flexWrap:"wrap"}}>
-        <KpiCard label="Active Pairs" value={FX_PAIRS.length} sub="Tracked for conversion" accent={C.primary}/>
-        <KpiCard label="Missing (Apr 2026)" value={missingCurrent.length} accent={missingCurrent.length>0?C.danger:C.success} badge={missingCurrent.length>0?<Badge color="red" dot>Action required</Badge>:<Badge color="green" dot>All current</Badge>}/>
-        <KpiCard label="Reporting Currency" value="USD" sub="All reports converted to USD" accent={C.success}/>
-      </div>
-      {missingCurrent.length>0&&<Alert type="warning"><strong>Missing rates for {currentMonth}:</strong> {missingCurrent.join(", ")}. <button style={{background:"none",border:"none",color:C.warning,cursor:"pointer",fontWeight:700,textDecoration:"underline"}} onClick={()=>setShowAdd(true)}>Enter now →</button></Alert>}
-      <Tabs tabs={[{key:"current",label:`${currentMonth} Rates`},{key:"grid",label:"Rate Grid (2026)"},{key:"history",label:"Audit History"}]} active={tab} onChange={setTab}/>
-      {tab==="current"&&<Card>
-        <Table cols={[
-          {key:"pair",label:"Currency Pair",render:r=><strong>{r}</strong>},
-          {key:"rate",label:`Rate (${currentMonth})`,right:true,render:r=>{const e=getRateForMonth(r,currentMonth);return e?<span>1 {r.replace("/USD","")} = <strong>{e.rate.toFixed(4)} USD</strong></span>:<Badge color="red" dot>Missing</Badge>;}},
-          {key:"status",label:"Status",render:r=>getRateForMonth(r,currentMonth)?<Badge color="green">Entered</Badge>:<Badge color="red">Missing</Badge>},
-          {key:"actions",label:"",render:r=>{const e=getRateForMonth(r,currentMonth);return<Btn size="sm" variant={e?"ghost":"primary"} onClick={()=>{setAddForm({pair:r,from:r.replace("/USD",""),to:"USD",month:currentMonth,rate:e?.rate??""});setShowAdd(true);}}>{e?"Edit":"Enter Rate"}</Btn>;}},
-        ]} rows={FX_PAIRS}/>
-      </Card>}
-      {tab==="grid"&&<Card style={{padding:0}}>
-        <div style={{overflowX:"auto"}}>
-          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-            <thead><tr>
-              <th style={{padding:"10px 14px",background:C.bg,borderBottom:`1.5px solid ${C.border}`,textAlign:"left",fontWeight:700,position:"sticky",left:0,zIndex:1}}>Pair</th>
-              {MONTHS_2026.map((m,i)=><th key={m} style={{padding:"10px 10px",background:i===CUR_MONTH_IDX?C.primaryLight:C.bg,borderBottom:`1.5px solid ${C.border}`,textAlign:"right",fontWeight:600,color:i===CUR_MONTH_IDX?C.primary:C.textSub,whiteSpace:"nowrap"}}>{m}</th>)}
-            </tr></thead>
-            <tbody>{FX_PAIRS.map(pair=>(
-              <tr key={pair} style={{borderBottom:`1px solid ${C.border}`}}>
-                <td style={{padding:"8px 14px",fontWeight:700,background:C.white,position:"sticky",left:0}}>{pair}</td>
-                {MONTHS_2026.map((m,i)=>{const e=getRateForMonth(pair,m);const isPast=i<CUR_MONTH_IDX;const isCurrent=i===CUR_MONTH_IDX;return(
-                  <td key={m} style={{padding:"8px 10px",textAlign:"right",background:isCurrent?C.primaryLight:"transparent"}}>
-                    {isPast&&!e&&<span style={{color:C.danger,fontSize:11}}>✕</span>}
-                    {e&&<span style={{color:isPast?C.textSub:C.text}}>{e.rate.toFixed(4)}</span>}
-                    {i>CUR_MONTH_IDX&&!e&&<input type="number" step="0.0001" placeholder="—" style={{width:70,border:`1px solid ${C.border}`,borderRadius:4,padding:"2px 4px",fontSize:11,textAlign:"right"}}/>}
-                    {isCurrent&&!e&&<button onClick={()=>{setAddForm({pair,from:pair.replace("/USD",""),to:"USD",month:m,rate:""});setShowAdd(true);}} style={{background:C.primary,color:C.white,border:"none",borderRadius:4,padding:"2px 8px",fontSize:11,cursor:"pointer"}}>Enter</button>}
-                  </td>
-                );})}
-              </tr>
-            ))}</tbody>
-          </table>
-        </div>
-      </Card>}
-      {tab==="history"&&<Card>
-        <Alert type="info">FX rate history is permanently locked once the month ends.</Alert>
-        <Table cols={[
-          {key:"pair",label:"Pair",render:r=><strong>{r.pair}</strong>},{key:"month",label:"Month"},
-          {key:"rate",label:"Rate",right:true,render:r=><strong>{r.rate.toFixed(4)}</strong>},
-          {key:"formula",label:"Formula",render:r=><span style={{color:C.textSub}}>1 {r.from} = {r.rate.toFixed(4)} {r.to}</span>},
-          {key:"enteredBy",label:"By"},{key:"enteredAt",label:"Date"},
-          {key:"locked",label:"Status",render:()=><Badge color="gray">Locked</Badge>},
-        ]} rows={[...fxRates].sort((a,b)=>b.enteredAt.localeCompare(a.enteredAt))}/>
-      </Card>}
-      <Modal open={showAdd} onClose={()=>setShowAdd(false)} title="Enter FX Rate" width={520}>
-        <Alert type="info">Monthly average rates lock permanently once the month ends.</Alert>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
-          <Select label="Currency Pair" required value={addForm.pair} onChange={v=>setAddForm(p=>({...p,pair:v,from:v.replace("/USD","")}))} options={FX_PAIRS.map(p=>({value:p,label:p}))}/>
-          <Select label="Month" required value={addForm.month} onChange={v=>setAddForm(p=>({...p,month:v}))} options={MONTHS_2026.map(m=>({value:m,label:m}))}/>
-          <div style={{gridColumn:"1/-1"}}>
-            <Input label={`Exchange Rate (1 ${addForm.from} → USD)`} required type="number" step="0.0001" value={addForm.rate} onChange={v=>setAddForm(p=>({...p,rate:v}))} placeholder="e.g. 1.2680"/>
-            {addForm.rate&&<div style={{marginTop:8,padding:"10px 12px",background:C.primaryLight,borderRadius:6,fontSize:13}}>1 {addForm.from} = <strong>{parseFloat(addForm.rate).toFixed(4)} USD</strong></div>}
+      <SectionHeader title={name}/>
+      <Card>
+        <div style={{padding:"60px 40px",textAlign:"center",color:C.textMuted}}>
+          <div style={{fontSize:48,marginBottom:16}}>{icon}</div>
+          <div style={{fontWeight:700,fontSize:16,marginBottom:8,color:C.text}}>{name}</div>
+          <div style={{fontSize:13,maxWidth:400,margin:"0 auto",lineHeight:1.6}}>
+            {note||`This module will be fully rebuilt in the next session with complete spec compliance, proper validation, and live data integration.`}
           </div>
         </div>
-        <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:20}}>
-          <Btn variant="ghost" onClick={()=>setShowAdd(false)}>Cancel</Btn>
-          <Btn onClick={handleAddRates}>Save Rate</Btn>
-        </div>
-      </Modal>
+      </Card>
     </div>
   );
 }
 
-// ─── FORECAST ──────────────────────────────────────────────────────────────
-function Forecast(){
-  const [selectedSl,setSelectedSl]=useState(SERVICE_LINES_LIST[0]);
-  const [versions,setVersions]=useState(initForecastVersions);
-  const [entries,setEntries]=useState(initForecastEntries);
-  const [activeVersionId,setActiveVersionId]=useState("v2");
-  const [showVersionMgr,setShowVersionMgr]=useState(false);
-  const [showCompare,setShowCompare]=useState(false);
-  const [showNewVersion,setShowNewVersion]=useState(false);
-  const [compareVers,setCompareVers]=useState({a:"v1",b:"v2"});
-  const [showActuals,setShowActuals]=useState(true);
-  const [newVerForm,setNewVerForm]=useState({name:"",type:"Working",reason:"",copyFrom:""});
-  const slVersions=versions[selectedSl.id]||[];
-  const activeVersion=slVersions.find(v=>v.id===activeVersionId)||slVersions[slVersions.length-1];
-  const slEntries=entries[selectedSl.id]||{};
-  const activeEntries=slEntries[activeVersionId]||{};
-  const totalForecast=Object.values(activeEntries).reduce((s,e)=>s+(e.amount||0),0);
-  const totalActual=Object.values(activeEntries).reduce((s,e)=>s+(e.actual||0),0);
-  const variance=totalActual-totalForecast;
-  const realization=totalForecast>0?totalActual/totalForecast*100:0;
-  const isT_M=["T&M Managed","T&M Staffing"].includes(selectedSl.commercialType);
-  const isUnit=selectedSl.commercialType==="Unit-Based";
-  const versionColor=type=>type==="Baseline"?C.text:type==="Working"?C.primary:C.purple;
-  const versionBadge=type=>type==="Baseline"?"gray":type==="Working"?"blue":"purple";
-  const monthColColor=i=>i<CUR_MONTH_IDX?"#f8fafc":i===CUR_MONTH_IDX?"#edf4fd":C.white;
-  const handleEntryChange=(month,field,val)=>{
-    setEntries(prev=>{
-      const slE={...(prev[selectedSl.id]||{})};const verE={...(slE[activeVersionId]||{})};const cell={...(verE[month]||{})};
-      cell[field]=parseFloat(val)||0;
-      if((isT_M||isUnit)&&field!=="amount")cell.amount=Math.round((cell.qty||0)*(cell.rate||0));
-      verE[month]=cell;slE[activeVersionId]=verE;return{...prev,[selectedSl.id]:slE};
-    });
-  };
-  const handleCreateVersion=()=>{
-    if(!newVerForm.name)return;
-    const newId="v"+Date.now();
-    const copyEntries=newVerForm.copyFrom?slEntries[newVerForm.copyFrom]:{};
-    setVersions(prev=>({...prev,[selectedSl.id]:[...(prev[selectedSl.id]||[]).map(v=>({...v,isWorking:false})),{id:newId,name:newVerForm.name,type:newVerForm.type,reason:newVerForm.reason,createdBy:"Jane Smith",createdAt:"2026-04-09",locked:false,isWorking:true}]}));
-    setEntries(prev=>({...prev,[selectedSl.id]:{...(prev[selectedSl.id]||{}),[newId]:JSON.parse(JSON.stringify(copyEntries))}}));
-    setActiveVersionId(newId);setShowNewVersion(false);setNewVerForm({name:"",type:"Working",reason:"",copyFrom:""});
-  };
-  return(
-    <div>
-      <SectionHeader title="Forecast Entry" sub="Monthly revenue forecast by service line with version management"
-        action={<div style={{display:"flex",gap:8}}>
-          <Btn variant="secondary" size="sm" onClick={()=>setShowCompare(true)}>⇄ Compare</Btn>
-          <Btn variant="secondary" size="sm" onClick={()=>setShowVersionMgr(true)}>📋 Versions</Btn>
-          <Btn size="sm" onClick={()=>setShowNewVersion(true)}>+ New Version</Btn>
-        </div>}/>
-      <Card style={{marginBottom:20}}>
-        <div style={{display:"flex",gap:12,flexWrap:"wrap",alignItems:"flex-end"}}>
-          <Select label="Service Line" value={selectedSl.id} onChange={v=>{const sl=SERVICE_LINES_LIST.find(s=>s.id===v);setSelectedSl(sl);const vers=versions[sl.id]||[];const wv=vers.find(v2=>v2.isWorking)||vers[vers.length-1];if(wv)setActiveVersionId(wv.id);}} options={SERVICE_LINES_LIST.map(s=>({value:s.id,label:`${s.name} — ${s.customer}`}))} style={{minWidth:320}}/>
-          <div style={{display:"flex",gap:6}}>
-            {slVersions.map(v=><button key={v.id} onClick={()=>setActiveVersionId(v.id)} style={{padding:"6px 14px",borderRadius:20,border:`2px solid ${activeVersionId===v.id?versionColor(v.type):C.border}`,background:activeVersionId===v.id?versionColor(v.type):C.white,color:activeVersionId===v.id?C.white:C.textSub,fontWeight:600,fontSize:12,cursor:"pointer"}}>{v.name} {v.locked?"🔒":""}</button>)}
-          </div>
-          <label style={{display:"flex",alignItems:"center",gap:6,fontSize:13,color:C.textSub,marginLeft:"auto"}}><input type="checkbox" checked={showActuals} onChange={e=>setShowActuals(e.target.checked)}/>Show actuals</label>
-        </div>
-        <div style={{display:"flex",gap:16,marginTop:14,paddingTop:14,borderTop:`1px solid ${C.border}`,flexWrap:"wrap"}}>
-          <div style={{fontSize:12,color:C.textSub}}>Type: <Badge color="blue">{selectedSl.commercialType}</Badge></div>
-          <div style={{fontSize:12,color:C.textSub}}>Division: <strong>{selectedSl.division}</strong></div>
-          <div style={{fontSize:12,color:C.textSub}}>Currency: <strong>{selectedSl.currency}</strong></div>
-          {activeVersion&&<div style={{fontSize:12,color:C.textSub}}>Version: <Badge color={versionBadge(activeVersion.type)}>{activeVersion.name}</Badge></div>}
-        </div>
-      </Card>
-      <div style={{display:"flex",gap:16,marginBottom:20,flexWrap:"wrap"}}>
-        <KpiCard label="Total Forecast" value={fmtM(totalForecast)} accent={C.primary}/>
-        <KpiCard label="Actuals YTD" value={fmtM(totalActual)} accent={C.success}/>
-        <KpiCard label="Variance" value={fmtM(Math.abs(variance))} accent={variance>=0?C.success:C.danger} badge={<Badge color={variance>=0?"green":"red"} dot>{variance>=0?"Ahead":"Behind"}</Badge>}/>
-        <KpiCard label="Realization" value={pct(realization)} accent={realization>=95?C.success:realization>=80?C.warning:C.danger} badge={<Badge color={realization>=95?"green":realization>=80?"amber":"red"} dot>{realization>=95?"On track":realization>=80?"Watch":"At risk"}</Badge>}/>
-      </div>
-      {activeVersion?.locked&&<Alert type="info">This version is locked and read-only.</Alert>}
-      <Card style={{padding:0}}>
-        <div style={{padding:"14px 16px",display:"flex",gap:10,alignItems:"center",borderBottom:`1px solid ${C.border}`}}>
-          <span style={{fontWeight:700,fontSize:14}}>Monthly Forecast Grid</span>
-          <div style={{flex:1}}/>
-          {!activeVersion?.locked&&<><Btn variant="ghost" size="sm">Fill Down</Btn><Btn variant="ghost" size="sm">Repeat Flat</Btn></>}
-          <Btn variant="secondary" size="sm">Export CSV</Btn>
-        </div>
-        <div style={{overflowX:"auto"}}>
-          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-            <thead><tr>
-              <th style={{padding:"8px 12px",background:C.bg,borderBottom:`1.5px solid ${C.border}`,textAlign:"left",minWidth:100,position:"sticky",left:0}}>Month</th>
-              {isT_M&&<th style={{padding:"8px 12px",background:C.bg,borderBottom:`1.5px solid ${C.border}`,textAlign:"right",minWidth:80}}>Hours</th>}
-              {isUnit&&<th style={{padding:"8px 12px",background:C.bg,borderBottom:`1.5px solid ${C.border}`,textAlign:"right",minWidth:80}}>Units</th>}
-              {(isT_M||isUnit)&&<th style={{padding:"8px 12px",background:C.bg,borderBottom:`1.5px solid ${C.border}`,textAlign:"right",minWidth:90}}>Rate</th>}
-              <th style={{padding:"8px 12px",background:C.bg,borderBottom:`1.5px solid ${C.border}`,textAlign:"right",minWidth:110}}>Forecast ({selectedSl.currency})</th>
-              {showActuals&&<><th style={{padding:"8px 12px",background:C.bg,borderBottom:`1.5px solid ${C.border}`,textAlign:"right",minWidth:110}}>Actual</th>
-              <th style={{padding:"8px 12px",background:C.bg,borderBottom:`1.5px solid ${C.border}`,textAlign:"right",minWidth:90}}>Variance</th>
-              <th style={{padding:"8px 12px",background:C.bg,borderBottom:`1.5px solid ${C.border}`,textAlign:"right",minWidth:70}}>Real.%</th></>}
-              <th style={{padding:"8px 12px",background:C.bg,borderBottom:`1.5px solid ${C.border}`,textAlign:"left",minWidth:140}}>Note</th>
-            </tr></thead>
-            <tbody>
-              {MONTHS_2026.map((month,i)=>{
-                const e=activeEntries[month]||{qty:0,rate:0,amount:0,actual:null,note:""};
-                const isPast=i<CUR_MONTH_IDX,isCurrent=i===CUR_MONTH_IDX;
-                const locked=e.locked||activeVersion?.locked;
-                const var_=e.actual!=null?e.actual-e.amount:null;
-                const real=e.amount>0&&e.actual!=null?e.actual/e.amount*100:null;
-                return(
-                  <tr key={month} style={{borderBottom:`1px solid ${C.border}`,background:monthColColor(i)}}>
-                    <td style={{padding:"7px 12px",fontWeight:isCurrent?700:500,color:isCurrent?C.primary:C.text,position:"sticky",left:0,background:monthColColor(i)}}>
-                      {month}{isCurrent&&<span style={{fontSize:10,background:C.primary,color:C.white,borderRadius:4,padding:"1px 5px",marginLeft:4}}>NOW</span>}
-                      {isPast&&<span style={{fontSize:10,color:C.textMuted,marginLeft:4}}>🔒</span>}
-                    </td>
-                    {isT_M&&<td style={{padding:"4px 6px",textAlign:"right"}}>{locked?<span style={{color:C.textSub}}>{fmtN(e.qty||0)}</span>:<input type="number" value={e.qty||""} onChange={ev=>handleEntryChange(month,"qty",ev.target.value)} style={{width:70,border:`1px solid ${C.border}`,borderRadius:4,padding:"3px 6px",textAlign:"right",fontSize:12}}/>}</td>}
-                    {isUnit&&<td style={{padding:"4px 6px",textAlign:"right"}}>{locked?<span style={{color:C.textSub}}>{fmtN(e.qty||0)}</span>:<input type="number" value={e.qty||""} onChange={ev=>handleEntryChange(month,"qty",ev.target.value)} style={{width:70,border:`1px solid ${C.border}`,borderRadius:4,padding:"3px 6px",textAlign:"right",fontSize:12}}/>}</td>}
-                    {(isT_M||isUnit)&&<td style={{padding:"4px 6px",textAlign:"right"}}>{locked?<span style={{color:C.textSub}}>{fmtN(e.rate||0)}</span>:<input type="number" value={e.rate||""} onChange={ev=>handleEntryChange(month,"rate",ev.target.value)} style={{width:76,border:`1px solid ${C.border}`,borderRadius:4,padding:"3px 6px",textAlign:"right",fontSize:12}}/>}</td>}
-                    <td style={{padding:"4px 6px",textAlign:"right"}}>
-                      {locked||(isT_M||isUnit)?<strong style={{color:(isT_M||isUnit)?C.primary:C.text}}>{e.amount?fmtN(e.amount):<span style={{color:C.textMuted}}>—</span>}</strong>:<input type="number" value={e.amount||""} onChange={ev=>handleEntryChange(month,"amount",ev.target.value)} style={{width:100,border:`1px solid ${C.border}`,borderRadius:4,padding:"3px 6px",textAlign:"right",fontSize:12}}/>}
-                    </td>
-                    {showActuals&&<>
-                      <td style={{padding:"7px 12px",textAlign:"right",color:e.actual!=null?C.text:C.textMuted}}>{e.actual!=null?fmtN(Math.round(e.actual)):"—"}</td>
-                      <td style={{padding:"7px 12px",textAlign:"right"}}>{var_!=null?<span style={{color:var_>=0?C.success:C.danger,fontWeight:600}}>{var_>=0?"+":""}{fmtN(Math.round(var_))}</span>:"—"}</td>
-                      <td style={{padding:"7px 12px",textAlign:"right"}}>{real!=null?<span style={{color:real>=95?C.success:real>=80?C.warning:C.danger,fontWeight:600}}>{pct(real)}</span>:"—"}</td>
-                    </>}
-                    <td style={{padding:"4px 6px"}}>{locked?<span style={{color:C.textMuted,fontSize:11}}>{e.note||""}</span>:<input value={e.note||""} onChange={ev=>handleEntryChange(month,"note",ev.target.value)} placeholder="Note" style={{width:"100%",border:`1px solid ${C.border}`,borderRadius:4,padding:"3px 6px",fontSize:11}}/>}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-            <tfoot><tr style={{background:C.primaryLight,fontWeight:700}}>
-              <td style={{padding:"9px 12px",color:C.primary,position:"sticky",left:0,background:C.primaryLight}}>TOTAL</td>
-              {isT_M&&<td style={{padding:"9px 12px",textAlign:"right"}}>{fmtN(Object.values(activeEntries).reduce((s,e)=>s+(e.qty||0),0))}</td>}
-              {isUnit&&<td style={{padding:"9px 12px",textAlign:"right"}}>{fmtN(Object.values(activeEntries).reduce((s,e)=>s+(e.qty||0),0))}</td>}
-              {(isT_M||isUnit)&&<td/>}
-              <td style={{padding:"9px 12px",textAlign:"right",color:C.primary}}>{fmtN(totalForecast)}</td>
-              {showActuals&&<><td style={{padding:"9px 12px",textAlign:"right"}}>{fmtN(Math.round(totalActual))}</td>
-              <td style={{padding:"9px 12px",textAlign:"right",color:variance>=0?C.success:C.danger}}>{variance>=0?"+":""}{fmtN(Math.round(variance))}</td>
-              <td style={{padding:"9px 12px",textAlign:"right",color:realization>=95?C.success:realization>=80?C.warning:C.danger}}>{pct(realization)}</td></>}
-              <td/>
-            </tr></tfoot>
-          </table>
-        </div>
-      </Card>
-      <Modal open={showVersionMgr} onClose={()=>setShowVersionMgr(false)} title={`Forecast Versions — ${selectedSl.name}`} width={760}>
-        <Table cols={[
-          {key:"name",label:"Version",render:r=><span style={{fontWeight:700,color:versionColor(r.type)}}>{r.name} {r.isWorking&&<Badge color="blue">Working</Badge>} {r.locked&&"🔒"}</span>},
-          {key:"type",label:"Type",render:r=><Badge color={versionBadge(r.type)}>{r.type}</Badge>},
-          {key:"createdBy",label:"Created By"},{key:"createdAt",label:"Created"},
-          {key:"reason",label:"Reason",render:r=><span style={{fontSize:12,color:C.textSub}}>{r.reason}</span>},
-          {key:"total",label:"Total",right:true,render:r=>{const e=slEntries[r.id]||{};return<strong>{fmtN(Object.values(e).reduce((s,e2)=>s+(e2.amount||0),0))}</strong>;}},
-          {key:"actions",label:"",render:r=><Btn size="sm" variant="ghost" onClick={()=>{setActiveVersionId(r.id);setShowVersionMgr(false);}}>View</Btn>},
-        ]} rows={slVersions}/>
-      </Modal>
-      <Modal open={showCompare} onClose={()=>setShowCompare(false)} title="Compare Forecast Versions" width={860}>
-        <div style={{display:"flex",gap:12,marginBottom:20,alignItems:"flex-end"}}>
-          <Select label="Version A" value={compareVers.a} onChange={v=>setCompareVers(p=>({...p,a:v}))} options={slVersions.map(v=>({value:v.id,label:v.name}))} style={{width:200}}/>
-          <Select label="Version B" value={compareVers.b} onChange={v=>setCompareVers(p=>({...p,b:v}))} options={slVersions.map(v=>({value:v.id,label:v.name}))} style={{width:200}}/>
-        </div>
-        <div style={{overflowX:"auto"}}>
-          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-            <thead><tr>
-              <th style={{padding:"8px 12px",background:C.bg,borderBottom:`1.5px solid ${C.border}`,textAlign:"left"}}>Month</th>
-              <th style={{padding:"8px 12px",background:"#e8f0fa",borderBottom:`1.5px solid ${C.border}`,textAlign:"right"}}>{slVersions.find(v=>v.id===compareVers.a)?.name}</th>
-              <th style={{padding:"8px 12px",background:"#ede9fe",borderBottom:`1.5px solid ${C.border}`,textAlign:"right"}}>{slVersions.find(v=>v.id===compareVers.b)?.name}</th>
-              <th style={{padding:"8px 12px",background:C.bg,borderBottom:`1.5px solid ${C.border}`,textAlign:"right"}}>Actuals</th>
-              <th style={{padding:"8px 12px",background:C.bg,borderBottom:`1.5px solid ${C.border}`,textAlign:"right"}}>Δ</th>
-            </tr></thead>
-            <tbody>{MONTHS_2026.map((m,i)=>{
-              const eA=(slEntries[compareVers.a]||{})[m]||{},eB=(slEntries[compareVers.b]||{})[m]||{};
-              const diff=(eB.amount||0)-(eA.amount||0);
-              return<tr key={m} style={{borderBottom:`1px solid ${C.border}`,background:i===CUR_MONTH_IDX?C.primaryLight:"transparent"}}>
-                <td style={{padding:"7px 12px"}}>{m}</td>
-                <td style={{padding:"7px 12px",textAlign:"right",background:"#f0f4fc"}}>{fmtN(eA.amount||0)}</td>
-                <td style={{padding:"7px 12px",textAlign:"right",background:"#f5f3ff"}}>{fmtN(eB.amount||0)}</td>
-                <td style={{padding:"7px 12px",textAlign:"right",color:C.textSub}}>{eA.actual!=null?fmtN(Math.round(eA.actual)):"—"}</td>
-                <td style={{padding:"7px 12px",textAlign:"right",color:diff>0?C.success:diff<0?C.danger:C.textMuted,fontWeight:600}}>{diff!==0?`${diff>0?"+":""}${fmtN(diff)}`:"—"}</td>
-              </tr>;
-            })}</tbody>
-          </table>
-        </div>
-      </Modal>
-      <Modal open={showNewVersion} onClose={()=>setShowNewVersion(false)} title="Create New Forecast Version" width={520}>
-        <Alert type="info">Baseline versions are always immutable. New versions can be copied from existing ones.</Alert>
-        <div style={{display:"flex",flexDirection:"column",gap:16}}>
-          <Input label="Version Name" required value={newVerForm.name} onChange={v=>setNewVerForm(p=>({...p,name:v}))} placeholder="e.g. Q3 Revision"/>
-          <Select label="Version Type" required value={newVerForm.type} onChange={v=>setNewVerForm(p=>({...p,type:v}))} options={["Working","Locked"].map(t=>({value:t,label:t}))}/>
-          <Input label="Reason" value={newVerForm.reason} onChange={v=>setNewVerForm(p=>({...p,reason:v}))} placeholder="Why is this version being created?"/>
-          <Select label="Copy entries from" value={newVerForm.copyFrom} onChange={v=>setNewVerForm(p=>({...p,copyFrom:v}))} placeholder="Start blank" options={slVersions.map(v=>({value:v.id,label:v.name}))}/>
-        </div>
-        <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:20}}>
-          <Btn variant="ghost" onClick={()=>setShowNewVersion(false)}>Cancel</Btn>
-          <Btn onClick={handleCreateVersion} disabled={!newVerForm.name}>Create Version</Btn>
-        </div>
-      </Modal>
-    </div>
-  );
-}
-
-// ─── APP SHELL ─────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+// APP — root component with all shared state
+// ═══════════════════════════════════════════════════════════════════════════
 export default function App(){
   const [page,setPage]=useState("dashboard");
   const [collapsed,setCollapsed]=useState(false);
+
+  // ── Shared state ──
+  const [tags,setTags]=useState(INITIAL_TAGS);
+  const [entities,setEntities]=useState(INITIAL_ENTITIES);
+  const [taxRates,setTaxRates]=useState([]);
+  const [users]=useState(INITIAL_USERS);
+  const [customers,setCustomers]=useState([]);
+  const [contracts,setContracts]=useState([]);
+  const [employees,setEmployees]=useState([]);
+
   const groups=[...new Set(NAV.map(n=>n.group))];
-  const exceptionCount=initTagReviews.filter(r=>r.status==="Overdue").length+INVOICES.filter(i=>i.status==="Overdue").length;
-  const notifCount=exceptionCount+initAlerts.filter(a=>a.status==="Pending").length;
 
   const renderPage=()=>{
-    if(page==="dashboard")return<Dashboard onNav={setPage}/>;
-    if(page==="do-dashboard")return<DODashboard/>;
-    if(page==="ph-dashboard")return<PHDashboard/>;
-    if(page==="dh-dashboard")return<DHDashboard/>;
-    if(page==="admin-dashboard")return<AdminDashboard/>;
-    if(page==="leadership")return<LeadershipDashboard/>;
-    if(page==="customers")return<Customers/>;
-    if(page==="contracts")return<Contracts/>;
-    if(page==="projects")return<Projects/>;
-    if(page==="service-lines")return<ServiceLines/>;
-    if(page==="rate-card")return<RateCard/>;
-    if(page==="fx-rates")return<FxRates/>;
-    if(page==="forecast")return<Forecast/>;
-    if(page==="invoices")return<Invoices/>;
-    if(page==="exceptions")return<ExceptionReports/>;
-    if(page==="tag-reviews")return<TagReviews/>;
-    if(page==="users")return<UserManagement/>;
-    if(page==="tags")return<TagMaster/>;
+    if(page==="dashboard")return<Dashboard customers={customers} contracts={contracts} onNav={setPage}/>;
+    if(page==="tags")return<TagMaster tags={tags} setTags={setTags}/>;
+    if(page==="settings")return<Settings entities={entities} setEntities={setEntities} taxRates={taxRates} setTaxRates={setTaxRates}/>;
+    if(page==="customers")return<Customers tags={tags} users={users} customers={customers} setCustomers={setCustomers} contracts={contracts}/>;
+    if(page==="contracts")return<Contracts tags={tags} customers={customers} contracts={contracts} setContracts={setContracts} entities={entities}/>;
+    if(page==="employees")return<Employees tags={tags} users={users} employees={employees} setEmployees={setEmployees}/>;
+
+    // Session B modules
+    if(page==="projects")return<Placeholder name="Projects" icon="📁" note="Full spec rebuild coming in Session B — including project-level tags, scope notes, service line grid, and status workflow."/>;
+    if(page==="service-lines")return<Placeholder name="Service Lines" icon="⚙" note="Full spec rebuild coming in Session B — including Billing Basis, milestone structure for Fixed Price, mandatory forecast gate, and tag ownership rules."/>;
+    if(page==="forecast")return<Placeholder name="Forecast" icon="📊" note="Full spec rebuild coming in Session B — including forecast basis, versioning, planning vs actuals separation, and rollup reporting."/>;
+    if(page==="invoices")return<Placeholder name="Invoices" icon="🧾" note="Full spec rebuild coming in Session B — including contract-driven service line selection, tax, NET terms, auto due date, Freyr entity, and bank details footer."/>;
+    if(page==="rate-card")return<Placeholder name="Rate Card" icon="💰" note="Rate Card module carried over — will be integrated with Service Lines in Session B."/>;
+    if(page==="fx-rates")return<Placeholder name="FX Rates" icon="💱" note="FX Rates module carried over — will be integrated with reporting in Session C."/>;
+
+    // Session C modules
+    if(page==="exceptions")return<Placeholder name="Exception Reports" icon="⚠" note="Exception reports will be rebuilt in Session C with live data from all modules."/>;
+    if(page==="tag-reviews")return<Placeholder name="Tag Reviews" icon="🔁" note="Tag review workflow will be extended in Session C to cover both projects and employees, with reviewer = Reporting Manager for employees."/>;
+    if(page==="users")return<Placeholder name="User Management" icon="👤" note="User management will be updated in Session C with proper role and scope enforcement."/>;
+
     return null;
   };
 
   return(
     <div style={{display:"flex",height:"100vh",fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif",background:C.bg,color:C.text}}>
       {/* Sidebar */}
-      <div style={{width:collapsed?56:220,background:C.sidebar,display:"flex",flexDirection:"column",transition:"width 0.2s",flexShrink:0,overflowX:"hidden"}}>
-        <div style={{padding:collapsed?"18px 12px":"18px 20px",borderBottom:"1px solid rgba(255,255,255,0.07)",display:"flex",alignItems:"center",gap:10,cursor:"pointer"}} onClick={()=>setCollapsed(c=>!c)}>
-          <div style={{width:28,height:28,background:C.primary,borderRadius:6,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+      <div style={{width:collapsed?56:230,background:C.sidebar,display:"flex",flexDirection:"column",transition:"width 0.2s",flexShrink:0,overflowX:"hidden"}}>
+        <div style={{padding:collapsed?"16px 12px":"16px 20px",borderBottom:"1px solid rgba(255,255,255,0.07)",display:"flex",alignItems:"center",gap:10,cursor:"pointer"}} onClick={()=>setCollapsed(c=>!c)}>
+          <div style={{width:30,height:30,background:C.primary,borderRadius:6,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
             <span style={{color:C.white,fontWeight:900,fontSize:13}}>FP</span>
           </div>
           {!collapsed&&<span style={{color:C.white,fontWeight:700,fontSize:15,whiteSpace:"nowrap"}}>Freyr Pulse</span>}
         </div>
-        <div style={{flex:1,overflowY:"auto",padding:"10px 0"}}>
+
+        <div style={{flex:1,overflowY:"auto",padding:"8px 0"}}>
           {groups.map(group=>(
             <div key={group}>
-              {!collapsed&&<div style={{padding:"10px 20px 4px",fontSize:10,fontWeight:700,color:"rgba(168,189,214,0.5)",textTransform:"uppercase",letterSpacing:1}}>{group}</div>}
+              {!collapsed&&<div style={{padding:"10px 20px 3px",fontSize:10,fontWeight:700,color:"rgba(168,189,214,0.45)",textTransform:"uppercase",letterSpacing:1}}>{group}</div>}
               {NAV.filter(n=>n.group===group).map(n=>(
                 <div key={n.key} onClick={()=>setPage(n.key)} title={collapsed?n.label:""}
-                  style={{display:"flex",alignItems:"center",gap:10,padding:collapsed?"9px 14px":"9px 20px",cursor:"pointer",borderLeft:page===n.key?`3px solid ${C.primary}`:"3px solid transparent",background:page===n.key?"rgba(33,118,199,0.15)":"transparent",transition:"all 0.1s"}}>
-                  <span style={{fontSize:15,flexShrink:0}}>{n.icon}</span>
+                  style={{display:"flex",alignItems:"center",gap:10,padding:collapsed?"9px 13px":"8px 20px",cursor:"pointer",
+                    borderLeft:page===n.key?`3px solid ${C.primary}`:"3px solid transparent",
+                    background:page===n.key?"rgba(33,118,199,0.15)":"transparent",transition:"all 0.1s"}}>
+                  <span style={{fontSize:14,flexShrink:0}}>{n.icon}</span>
                   {!collapsed&&<span style={{color:page===n.key?C.white:C.sidebarText,fontWeight:page===n.key?600:400,fontSize:13,whiteSpace:"nowrap"}}>{n.label}</span>}
-                  {!collapsed&&n.key==="exceptions"&&exceptionCount>0&&<span style={{marginLeft:"auto",background:C.danger,color:C.white,borderRadius:10,padding:"1px 6px",fontSize:10,fontWeight:700}}>{exceptionCount}</span>}
                 </div>
               ))}
             </div>
           ))}
         </div>
-        <div style={{padding:collapsed?"14px 12px":"14px 20px",borderTop:"1px solid rgba(255,255,255,0.07)",display:"flex",alignItems:"center",gap:10}}>
+
+        <div style={{padding:collapsed?"12px":"12px 20px",borderTop:"1px solid rgba(255,255,255,0.07)",display:"flex",alignItems:"center",gap:10}}>
           <div style={{width:30,height:30,background:C.primary,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-            <span style={{color:C.white,fontWeight:700,fontSize:12}}>JS</span>
+            <span style={{color:C.white,fontWeight:700,fontSize:12}}>SC</span>
           </div>
-          {!collapsed&&<div><div style={{color:C.white,fontSize:12,fontWeight:600}}>Jane Smith</div><div style={{color:C.sidebarText,fontSize:11}}>Delivery Owner</div></div>}
+          {!collapsed&&<div><div style={{color:C.white,fontSize:12,fontWeight:600}}>Sarah Chen</div><div style={{color:C.sidebarText,fontSize:11}}>Admin</div></div>}
         </div>
       </div>
 
       {/* Main */}
       <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
-        <div style={{height:54,background:C.white,borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",padding:"0 24px",gap:16,flexShrink:0}}>
+        {/* Top bar */}
+        <div style={{height:52,background:C.white,borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",padding:"0 24px",gap:16,flexShrink:0}}>
           <div style={{flex:1,display:"flex",gap:6,fontSize:13,color:C.textMuted}}>
-            <span>Freyr Pulse</span><span>/</span><span style={{color:C.text,fontWeight:600}}>{NAV.find(n=>n.key===page)?.label}</span>
+            <span>Freyr Pulse</span><span>/</span>
+            <span style={{color:C.text,fontWeight:600}}>{NAV.find(n=>n.key===page)?.label||"Dashboard"}</span>
           </div>
-          <div style={{display:"flex",alignItems:"center",gap:16}}>
-            <Badge color="blue">April 2026</Badge>
-            <div style={{position:"relative",cursor:"pointer"}}>
-              <span style={{fontSize:18}}>🔔</span>
-              <span style={{position:"absolute",top:-4,right:-4,background:C.danger,color:C.white,borderRadius:"50%",width:16,height:16,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:700}}>{notifCount}</span>
-            </div>
+          <div style={{display:"flex",alignItems:"center",gap:12}}>
+            <span style={{fontSize:12,color:C.textMuted}}>{customers.length} customers · {contracts.length} contracts · {employees.length} employees</span>
+            <div style={{width:1,height:20,background:C.border}}/>
+            <span style={{fontSize:12,color:C.textSub,fontWeight:600}}>Session A</span>
           </div>
         </div>
+
+        {/* Page content */}
         <div style={{flex:1,overflowY:"auto",padding:28}}>
           {renderPage()}
         </div>
