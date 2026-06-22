@@ -1,0 +1,233 @@
+/* ==================================================================
+   Freyr Sales Intelligence — Design System
+   ------------------------------------------------------------------
+   Direction: an intelligence "briefing dossier". Executive-clean,
+   neutral paper + ink, a single petrol-teal accent. Personality comes
+   from typography (Fraunces display + Inter body + IBM Plex Mono for
+   data/eyebrows), hairline rules, and confidence chips — not colour.
+   ================================================================== */
+
+:root {
+  /* ---- Palette: neutral + ONE accent ---- */
+  --ink: #15191c;          /* near-black text */
+  --ink-soft: #3b434a;     /* secondary text */
+  --muted: #6a727b;        /* tertiary / captions */
+  --faint: #98a0a8;        /* disabled / hint */
+  --paper: #f7f6f2;        /* app background (warm off-white) */
+  --surface: #ffffff;      /* cards */
+  --surface-2: #f2f1ec;    /* inset / hover */
+  --line: #e4e3dc;         /* hairline borders */
+  --line-strong: #d4d3ca;
+
+  --accent: #0c6b63;       /* petrol teal — the one accent */
+  --accent-ink: #084b45;   /* darker for text-on-light */
+  --accent-soft: #e6f0ee;  /* tint background */
+  --accent-line: #bcd7d2;
+
+  /* Semantic, kept low-saturation so the page never gets loud */
+  --high: #0c6b63;         /* opportunity High = accent */
+  --high-soft: #e6f0ee;
+  --med: #9a6b16;          /* amber-brown */
+  --med-soft: #f5edda;
+  --low: #6a727b;          /* neutral grey */
+  --low-soft: #eeeeea;
+  --danger: #9b3a32;
+  --danger-soft: #f4e6e4;
+
+  /* ---- Type ---- */
+  --font-display: "Fraunces", Georgia, "Times New Roman", serif;
+  --font-body: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* ---- Radius / shadow / spacing ---- */
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 14px;
+  --shadow-sm: 0 1px 2px rgba(21, 25, 28, 0.04), 0 1px 3px rgba(21, 25, 28, 0.05);
+  --shadow-md: 0 2px 6px rgba(21, 25, 28, 0.05), 0 6px 16px rgba(21, 25, 28, 0.06);
+  --maxw: 1180px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+a { color: var(--accent-ink); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+h1, h2, h3, h4 { margin: 0; font-weight: 600; line-height: 1.2; letter-spacing: -0.01em; }
+
+button { font-family: inherit; }
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+
+/* ---- Layout helpers ---- */
+.container { max-width: var(--maxw); margin: 0 auto; padding: 0 24px; }
+.stack > * + * { margin-top: 16px; }
+.row { display: flex; align-items: center; gap: 12px; }
+.row-wrap { display: flex; flex-wrap: wrap; gap: 12px; }
+.spread { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.grid { display: grid; gap: 16px; }
+.grid-2 { grid-template-columns: repeat(2, 1fr); }
+.grid-3 { grid-template-columns: repeat(3, 1fr); }
+.grid-4 { grid-template-columns: repeat(4, 1fr); }
+@media (max-width: 880px) {
+  .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+}
+
+/* ---- Eyebrow (mono label) — a recurring structural device ---- */
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+/* ---- Card ---- */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: 22px;
+  box-shadow: var(--shadow-sm);
+}
+.card-pad-lg { padding: 28px; }
+.card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 4px; }
+.card-title { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
+.card-sub { color: var(--muted); font-size: 13px; }
+
+/* Section heading used across the dashboard */
+.section-num {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--accent);
+  font-weight: 500;
+}
+
+/* ---- Hairline divider ---- */
+.hr { height: 1px; background: var(--line); border: 0; margin: 18px 0; }
+.hr-dotted { height: 0; border: 0; border-top: 1px dashed var(--line-strong); margin: 16px 0; }
+
+/* ---- Chips / badges ---- */
+.chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 500;
+  padding: 3px 10px; border-radius: 999px;
+  background: var(--surface-2); color: var(--ink-soft);
+  border: 1px solid var(--line);
+  white-space: nowrap;
+}
+.chip-accent { background: var(--accent-soft); color: var(--accent-ink); border-color: var(--accent-line); }
+.chip-mono { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.04em; }
+
+/* Confidence chips — the trust signal that appears everywhere */
+.conf {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.06em;
+  text-transform: uppercase; font-weight: 500;
+  padding: 2px 8px; border-radius: 999px;
+  border: 1px solid var(--line);
+}
+.conf::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.conf-verified { color: var(--high); background: var(--high-soft); border-color: var(--accent-line); }
+.conf-likely   { color: var(--med);  background: var(--med-soft);  border-color: #e8dcc0; }
+.conf-inferred { color: var(--low);  background: var(--low-soft);  border-color: var(--line-strong); }
+.conf-unknown  { color: var(--faint);background: var(--surface-2); border-color: var(--line); }
+
+/* Opportunity level pill */
+.level { font-family: var(--font-mono); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; font-size: 12px; padding: 4px 12px; border-radius: 999px; }
+.level-high { color: #fff; background: var(--accent); }
+.level-medium { color: #fff; background: var(--med); }
+.level-low { color: #fff; background: var(--low); }
+
+/* ---- Buttons ---- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  font-size: 14px; font-weight: 500;
+  padding: 9px 16px; border-radius: var(--r-md);
+  border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink);
+  cursor: pointer; transition: background .15s ease, border-color .15s ease, transform .05s ease;
+}
+.btn:hover { background: var(--surface-2); }
+.btn:active { transform: translateY(1px); }
+.btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn-primary:hover { background: var(--accent-ink); }
+.btn-ghost { border-color: transparent; background: transparent; color: var(--ink-soft); }
+.btn-ghost:hover { background: var(--surface-2); }
+.btn-sm { padding: 6px 11px; font-size: 13px; }
+.btn:disabled { opacity: .55; cursor: not-allowed; }
+
+/* ---- Forms ---- */
+.input, .select, .textarea {
+  width: 100%; font-family: inherit; font-size: 14px; color: var(--ink);
+  background: var(--surface); border: 1px solid var(--line-strong);
+  border-radius: var(--r-md); padding: 10px 12px;
+}
+.textarea { resize: vertical; min-height: 90px; line-height: 1.5; }
+.input:focus, .select:focus, .textarea:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: var(--accent); }
+.field-label { display: block; font-size: 13px; font-weight: 500; color: var(--ink-soft); margin-bottom: 6px; }
+
+/* ---- Utility text ---- */
+.muted { color: var(--muted); }
+.soft { color: var(--ink-soft); }
+.small { font-size: 13px; }
+.tiny { font-size: 12px; }
+.mono { font-family: var(--font-mono); }
+.display { font-family: var(--font-display); }
+.strong { font-weight: 600; }
+.nowrap { white-space: nowrap; }
+.fade-in { animation: fadeIn .4s ease both; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+/* ---- Lists ---- */
+.list-reasons { margin: 0; padding: 0; list-style: none; }
+.list-reasons li { position: relative; padding-left: 22px; margin: 9px 0; }
+.list-reasons li::before {
+  content: ""; position: absolute; left: 4px; top: 8px;
+  width: 7px; height: 7px; border-radius: 2px; background: var(--accent); transform: rotate(45deg);
+}
+
+.list-check { margin: 0; padding: 0; list-style: none; }
+.list-check li { position: relative; padding-left: 24px; margin: 8px 0; }
+.list-check li::before {
+  content: "→"; position: absolute; left: 0; top: 0; color: var(--accent); font-weight: 600;
+}
+
+/* Button-styled links shouldn't pick up the global anchor underline on hover */
+.btn:hover, .brand:hover { text-decoration: none; }
+
+/* The verdict hero stacks on small screens (score dial above the verdict) */
+.why-hero-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 28px; }
+@media (max-width: 640px) {
+  .why-hero-top { flex-direction: column-reverse; align-items: center; }
+  .why-hero-top .why-hero-verdict { width: 100%; }
+}
+
+/* Responsive tightening for tablet / mobile */
+@media (max-width: 600px) {
+  html, body { font-size: 14.5px; }
+  .nav-brand-text { display: none; }   /* keep just the F mark on phones */
+  .card { padding: 18px; }
+  .card-pad-lg { padding: 20px; }
+  h1.display { font-size: 26px !important; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
